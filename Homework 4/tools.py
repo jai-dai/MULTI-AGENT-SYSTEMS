@@ -11,6 +11,7 @@ exceptions, so a failure becomes context the model can react to.
 
 import json
 import logging
+import re
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -27,6 +28,9 @@ _TRAFILATURA_CONFIG = use_config()
 _TRAFILATURA_CONFIG.set("DEFAULT", "DOWNLOAD_TIMEOUT", str(settings.request_timeout))
 
 _MAX_SNIPPET_LENGTH = 400
+
+# Below this, an "article" is almost certainly an abstract or a landing page.
+_SHORT_PAGE_THRESHOLD = 1200
 
 
 # --------------------------------------------------------------------------- #
@@ -95,46 +99,104 @@ def web_search(query: str, max_results: int = settings.max_search_results) -> st
     return "\n".join(lines)
 
 
-def read_url(url: str) -> str:
-    url = str(url).strip()
-    parsed = urlparse(url)
-    if parsed.scheme not in ("http", "https") or not parsed.netloc:
-        return f"ERROR: '{url}' is not a valid http(s) URL."
-
+def _fetch_text(url: str) -> tuple[str | None, str | None]:
+    """Download + extract one URL. Returns (text, error_message)."""
     try:
         downloaded = trafilatura.fetch_url(url, config=_TRAFILATURA_CONFIG)
     except Exception as exc:
-        return f"ERROR: could not download {url} ({type(exc).__name__}: {exc})."
+        return None, f"could not download {url} ({type(exc).__name__}: {exc})"
 
     if not downloaded:
-        return (
-            f"ERROR: page {url} is unavailable (timeout, 403/404, or blocked). "
-            "Use another source."
-        )
+        return None, f"page {url} is unavailable (timeout, 403/404, or blocked)"
 
     try:
         text = trafilatura.extract(
             downloaded, url=url, include_comments=False, include_tables=True
         )
     except Exception as exc:
-        return f"ERROR: could not extract text from {url} ({type(exc).__name__}: {exc})."
+        return None, f"could not extract text from {url} ({type(exc).__name__}: {exc})"
 
     if not text or not text.strip():
-        return (
-            f"ERROR: no readable text extracted from {url} (JS-heavy page or PDF). "
-            "Use another source."
+        return None, f"no readable text extracted from {url} (JS-heavy page or PDF)"
+
+    return text.strip(), None
+
+
+def read_url(url: str) -> str:
+    url = str(url).strip()
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return f"ERROR: '{url}' is not a valid http(s) URL."
+
+    # An arXiv /abs/ page is only the abstract. Try the full-text HTML rendering first
+    # and fall back to the abstract page if the paper has no HTML version.
+    fetched_url = url
+    text, error = None, None
+    abs_match = re.match(r"(https?://arxiv\.org)/abs/(\S+)", url, flags=re.IGNORECASE)
+    if abs_match:
+        html_url = f"{abs_match.group(1)}/html/{abs_match.group(2)}"
+        text, _ = _fetch_text(html_url)
+        if text:
+            fetched_url = html_url
+
+    if text is None:
+        text, error = _fetch_text(url)
+
+    if text is None:
+        return f"ERROR: {error}. Use another source."
+
+    note = ""
+    if abs_match and fetched_url == url:
+        # We asked for the HTML full text and did not get it.
+        note = (
+            "\n\n[ABSTRACT ONLY: arXiv has no HTML full text for this paper, so the above "
+            "is the abstract page. Do not describe it as the full paper — cite it as an "
+            "abstract, or find the full text elsewhere.]"
+        )
+    elif len(text) < _SHORT_PAGE_THRESHOLD:
+        note = (
+            f"\n\n[SHORT PAGE: only {len(text)} characters extracted. This is likely an "
+            "abstract, a paywall or a landing page rather than the full text — treat it "
+            "as a pointer, not as evidence, and look for the full version.]"
         )
 
-    return f"Content of {url}:\n\n{_truncate(text.strip(), settings.max_url_content_length)}"
+    body = _truncate(text, settings.max_url_content_length)
+    return f"Content of {fetched_url}:\n\n{body}{note}"
+
+
+def _missing_report_sections(content: str) -> list[str]:
+    """Which required sections the report is missing (EN / UA / RU headings)."""
+    required = {
+        "Conclusions": r"^#{1,4}\s*\d*\.?\s*(conclusions?|висновк\w*|выводы)\b",
+        "Sources": r"^#{1,4}\s*\d*\.?\s*(sources?|references?|джерела|источники)\b",
+    }
+    return [
+        name
+        for name, pattern in required.items()
+        if not re.search(pattern, content, flags=re.IGNORECASE | re.MULTILINE)
+    ]
 
 
 def write_report(filename: str, content: str) -> str:
-    if not content or not str(content).strip():
+    content = str(content) if content is not None else ""
+    if not content.strip():
         return "ERROR: refusing to write an empty report."
+
+    # Contract check: the model is told which sections a report must have, but only a
+    # check in code actually guarantees it. Rejected reports come back as an ERROR the
+    # model can fix, which also forces it to rewrite the file as a whole instead of
+    # patching it (patching is what produced sections numbered 9, 11, 10).
+    missing = _missing_report_sections(content)
+    if missing:
+        return (
+            f"ERROR: report is missing required section(s): {', '.join(missing)}. "
+            "Rewrite the FULL report with every required section present and the "
+            "section numbering consecutive, then call write_report again."
+        )
 
     path = _safe_report_path(filename)
     try:
-        path.write_text(str(content), encoding="utf-8")
+        path.write_text(content, encoding="utf-8")
     except OSError as exc:
         return f"ERROR: could not write {path} ({exc})."
     return f"Report saved to {path} ({len(content)} characters)."
@@ -204,7 +266,10 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             "description": (
                 "Fetch the main text of a web page (navigation, ads and boilerplate "
                 "stripped). Long pages are truncated and marked with '[TRUNCATED ...]'. "
-                "Use this on URLs found by web_search to get actual facts."
+                "Use this on URLs found by web_search to get actual facts. For arXiv "
+                "links the full-text HTML version is fetched automatically when it "
+                "exists; if the result is marked '[ABSTRACT ONLY]' or '[SHORT PAGE]', "
+                "you have not read the full text and must not present it as such."
             ),
             "parameters": {
                 "type": "object",
@@ -225,7 +290,10 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
             "name": "write_report",
             "description": (
                 "Save the final Markdown report to the output directory. Call this once "
-                "the research is done, with the complete report as content."
+                "the research is done, with the complete report as content. The report "
+                "must contain a Conclusions section and a Sources section (English, "
+                "Ukrainian or Russian headings) — otherwise the call is rejected. Always "
+                "pass the FULL report text: writing is a whole-file overwrite, not a patch."
             ),
             "parameters": {
                 "type": "object",
