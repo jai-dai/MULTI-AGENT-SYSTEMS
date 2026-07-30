@@ -9,6 +9,7 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("API_KEY", "OPENAI_API_KEY"),
     )
     model_name: str = "gpt-4.1-mini"
+    temperature: float = 0.0
 
     # Tool limits (context engineering)
     max_search_results: int = 5
@@ -18,7 +19,10 @@ class Settings(BaseSettings):
 
     # ReAct loop limits
     max_iterations: int = 10
+    # Page downloads: short, a slow site must not stall the agent.
     request_timeout: int = 60
+    # Model calls: reasoning models (gpt-5*, o*) routinely think for minutes.
+    model_timeout: int = 300
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

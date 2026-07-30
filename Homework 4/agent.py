@@ -38,7 +38,7 @@ class ResearchAgent:
     def __init__(self) -> None:
         self.client = OpenAI(
             api_key=settings.api_key.get_secret_value(),
-            timeout=settings.request_timeout,
+            timeout=settings.model_timeout,
             max_retries=2,
         )
         # Dialogue memory: the system prompt stays first, everything else is appended.
@@ -126,8 +126,11 @@ class ResearchAgent:
         kwargs = {
             "model": settings.model_name,
             "messages": self.messages,
-            "temperature": 0,
         }
+        # Reasoning models (gpt-5*, o*) accept only the default temperature and
+        # reject temperature=0 with a 400.
+        if not settings.model_name.startswith(("gpt-5", "o1", "o3", "o4")):
+            kwargs["temperature"] = settings.temperature
         if with_tools:
             kwargs["tools"] = TOOL_SCHEMAS
             kwargs["tool_choice"] = "auto"

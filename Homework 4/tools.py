@@ -26,6 +26,13 @@ logging.getLogger("trafilatura").setLevel(logging.ERROR)
 
 _TRAFILATURA_CONFIG = use_config()
 _TRAFILATURA_CONFIG.set("DEFAULT", "DOWNLOAD_TIMEOUT", str(settings.request_timeout))
+# The library's default user agent is blocked by a fair number of sites (403).
+_TRAFILATURA_CONFIG.set(
+    "DEFAULT",
+    "USER_AGENTS",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+)
 
 _MAX_SNIPPET_LENGTH = 400
 
