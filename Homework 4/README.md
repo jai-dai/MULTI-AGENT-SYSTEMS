@@ -369,6 +369,31 @@ MODEL_TIMEOUT   = 300   # виклик моделі — reasoning-моделі �
   спалила 200k токенів: увесь контекст першого дослідження поїхав у модель повторно.
   Це та сама квадратична залежність, описана вище, тільки в масштабі реальної задачі.
 
+## Приклади звітів
+
+Усі файли в [example_output/](example_output/) — це **необроблений вивід агента**,
+збережений ним самим через `write_report`. Нічого не дописано й не відредаговано руками.
+
+| Файл | Модель | Що демонструє |
+|---|---|---|
+| [report.md](example_output/report.md) | `gpt-4.1-mini` | базовий прогон: 3 пошуки → 3 читання → звіт |
+| [best_practices_rag.md](example_output/best_practices_rag.md) | `gpt-4.1-mini` | **дефектний звіт «до»**: нумерація `9 → 11 → 10`, немає `Conclusions`, джерела-анотації. Саме він змусив перенести перевірки в код |
+| [chunking_best_practices.md](example_output/chunking_best_practices.md) | `gpt-4.1-mini` | той самий сценарій «після»: відмова `write_report` і самостійне виправлення моделлю |
+| [jjdai_landscape.md](example_output/jjdai_landscape.md) | `gpt-5.1` | велике дослідження: 31 виклик інструментів, 20 джерел, ~3900 слів |
+| [jjdai_positioning.md](example_output/jjdai_positioning.md) | `gpt-5.1` | порівняльний аналіз у другій репліці — спирається на памʼять про перший звіт |
+
+Останні два — реальна, не навчальна задача: огляд ландшафту децентралізованих AI-мереж
+(Bittensor, Gensyn, Ritual, Psyche, Akash, io.net, zkML/opML/TEE) і критичний розбір
+архітектури [JJ DAI](https://jj-dai.org) на цьому фоні.
+
+**Застереження про достовірність.** Це вивід LLM, а не рецензована робота. Вибірково
+перевірено чотири цитати з whitepaper, на яких тримається аргументація
+(`Attestation slot (swappable)`, `Reputation is earned on class A, spent on class C`,
+`The base model is obtained or trained once and frozen`, `Data, not weights, individuates`) —
+усі присутні дослівно. Решта тверджень не верифікована пофактно. Сам агент позначив три
+джерела з двадцяти як прочитані лише за сніпетами — тобто інструкція «не видавати
+непрочитане за прочитане» відпрацювала.
+
 ## Обмеження
 
 - DuckDuckGo іноді ріже частоту запитів — `web_search` поверне `ERROR: search failed`.
