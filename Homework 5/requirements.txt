@@ -1,0 +1,24 @@
+# Tested with Python 3.12. No LangChain: the agent loop is hand-written
+# (homework-lesson-4) and the retrieval stack is assembled directly.
+
+# agent + tools
+openai==2.48.0
+ddgs==9.14.4
+trafilatura==2.1.0
+pydantic==2.13.4
+pydantic-settings==2.14.2
+
+# ingestion + retrieval
+pypdf==6.14.2
+faiss-cpu==1.15.0
+rank-bm25==0.2.2
+sentence-transformers==3.3.1
+
+# Pinned as a set, not by preference — see README "Environment notes".
+# torch 2.2.2 is the last macOS x86_64 build; transformers >= 4.46 refuses it,
+# numpy >= 2 breaks torch 2.2.2, and scipy/scikit-learn must match numpy 1.x.
+transformers==4.44.2
+torch==2.2.2
+numpy==1.26.4
+scipy==1.13.1
+scikit-learn==1.5.2
