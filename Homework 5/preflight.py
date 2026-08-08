@@ -178,7 +178,7 @@ class Report:
         return self.verdict == "ok"
 
 
-def assess() -> Report:
+def assess(*, includes_reranker: bool = True) -> Report:
     # Everything below is in GIGABYTES. The probes return bytes; converting at
     # the boundary (rather than at each comparison) is what keeps `needed` and
     # `available` comparable — mixing the two silently passes every check.
@@ -192,13 +192,16 @@ def assess() -> Report:
     download = 0.0
     uses_torch = False
 
-    rerank_gb, rerank_cached = _model_need(settings.reranker_model)
-    needed += rerank_gb
-    uses_torch = True
-    if not rerank_cached:
-        download += rerank_gb
-    lines.append(f"reranker {settings.reranker_model}: {rerank_gb:.1f} GB"
-                 + ("" if rerank_cached else "  (not downloaded yet)"))
+    # Ingestion never loads the cross-encoder — counting it there would refuse
+    # a run that fits, which is worse than not checking at all.
+    if includes_reranker and settings.rerank_enabled:
+        rerank_gb, rerank_cached = _model_need(settings.reranker_model)
+        needed += rerank_gb
+        uses_torch = True
+        if not rerank_cached:
+            download += rerank_gb
+        lines.append(f"reranker {settings.reranker_model}: {rerank_gb:.1f} GB"
+                     + ("" if rerank_cached else "  (not downloaded yet)"))
 
     if settings.embedding_backend == "local":
         embed_gb, embed_cached = _model_need(settings.embedding_model)
@@ -292,7 +295,7 @@ def loads_anything_locally() -> bool:
     return settings.embedding_backend == "local" or settings.rerank_enabled
 
 
-def guard(*, interactive: bool = None) -> Report:
+def guard(*, interactive: bool = None, includes_reranker: bool = True) -> Report:
     """Assess, print, and decide whether to continue.
 
     Exits only on `insufficient`, and only without an explicit override —
@@ -304,7 +307,7 @@ def guard(*, interactive: bool = None) -> Report:
     if not loads_anything_locally():
         return Report("ok", 0, 0, 0, 0, 0)
 
-    report = assess()
+    report = assess(includes_reranker=includes_reranker)
     print(render(report))
 
     if report.verdict == "ok":

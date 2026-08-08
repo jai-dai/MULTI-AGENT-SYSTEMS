@@ -1,5 +1,6 @@
 """Interactive REPL for the research agent with a hand-written ReAct loop."""
 
+import llm
 import preflight
 from agent import ResearchAgent
 from config import settings
@@ -14,7 +15,9 @@ def main():
     agent = ResearchAgent()
 
     print("Research Agent — custom ReAct loop (type 'exit' to quit, 'reset' to clear memory)")
-    print(f"model: {settings.model_name} | step limit: {settings.max_iterations}")
+    # Say which provider is actually answering — with LLM_BACKEND=auto that is
+    # derived from the model name, so it should be visible rather than guessed.
+    print(f"model: {llm.describe()} | step limit: {settings.max_iterations}")
     print("-" * 40)
 
     while True:

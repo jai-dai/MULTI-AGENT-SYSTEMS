@@ -4,6 +4,18 @@
     python ingest.py --rebuild       # discard the index and start over
     python ingest.py --dirs a,b      # ingest other directories (also DATA_DIR)
 
+On a large corpus this runs for hours, nearly all of it in the embedding phase,
+which reports `embedded X/Y` per batch. Keep that output:
+
+    python -u ingest.py 2>&1 | tee ingest.log
+
+`-u` unbuffers Python, `tee` writes the file and still shows the run. Do NOT
+pipe through `tail`/`head` — they hold everything in memory and print only once
+the process ends, so a long run looks silent and an interrupted one leaves
+nothing at all. The log matters afterwards too: `save_state` writes the manifest
+ONCE, at the very end, so an interrupted run leaves no other trace of which
+files gave no text and which failed to read.
+
 Written without LangChain, like the agent itself: a PDF/TXT/MD reader, a
 recursive splitter, batched OpenAI embeddings, and a FAISS index saved next to
 the chunk texts — the same texts BM25 uses at query time.
@@ -415,7 +427,7 @@ def ingest(dirs: list[str] | None = None, rebuild: bool = False) -> dict:
     # project does; check before spending minutes on it, not after.
     import preflight
 
-    preflight.guard()
+    preflight.guard(includes_reranker=False)   # ingestion never loads it
 
     dirs = dirs or settings.ingest_dirs
     print(f"scanning: {', '.join(dirs)}")

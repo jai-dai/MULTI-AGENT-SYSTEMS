@@ -8,13 +8,16 @@ The whole agent is the loop in `ResearchAgent.run()`:
 
 Conversation memory is just `self.messages`: the list we keep between requests and
 resend on every API call. That list *is* the agent's state.
+
+Nothing here knows which provider answers. The message list is kept in one
+canonical format and `llm.py` translates it on the way out — so the loop below
+reads the same whether the model is GPT, Claude, or a local one behind Ollama.
 """
 
 import json
 
-from openai import OpenAI, OpenAIError
-
 from config import SYSTEM_PROMPT, settings
+from llm import LLMError, get_backend
 from tools import TOOL_SCHEMAS, dispatch
 
 LOG_PREVIEW = 160
@@ -36,12 +39,7 @@ def _format_args(arguments: str) -> str:
 
 class ResearchAgent:
     def __init__(self) -> None:
-        self.client = OpenAI(
-            api_key=settings.api_key.get_secret_value(),
-            base_url=settings.chat_base_url or None,
-            timeout=settings.model_timeout,
-            max_retries=2,
-        )
+        self.llm = get_backend()
         # Dialogue memory: the system prompt stays first, everything else is appended.
         self.messages: list[dict] = [{"role": "system", "content": SYSTEM_PROMPT}]
 
@@ -59,29 +57,28 @@ class ResearchAgent:
         saved_reports: list[str] = []
 
         for step in range(1, settings.max_iterations + 1):
-            message, usage = self._call_model(with_tools=True)
-            tokens_used += usage
+            reply = self._call_model(with_tools=True)
+            tokens_used += reply.tokens
 
-            # Persist exactly what the protocol expects: assistant message with the
-            # tool_calls it requested (built explicitly, not dumped from the SDK object).
-            self.messages.append(self._assistant_message(message))
+            # Persist the turn in whatever shape this backend needs to replay it.
+            self.messages.append(self.llm.assistant_entry(reply))
 
             # Some models emit reasoning text alongside tool calls — that is the
             # "Thought" part of ReAct, worth showing.
-            if message.content and message.tool_calls:
-                print(f"\n💭 {_preview(message.content, 300)}")
+            if reply.text and reply.tool_calls:
+                print(f"\n💭 {_preview(reply.text, 300)}")
 
-            if not message.tool_calls:
+            if not reply.tool_calls:
                 print(f"\n📊 {step} step(s), {tool_calls_made} tool call(s), ~{tokens_used} tokens")
-                return message.content or ""
+                return reply.text or ""
 
             print(f"\n[step {step}/{settings.max_iterations}]")
-            for call in message.tool_calls:
+            for call in reply.tool_calls:
                 tool_calls_made += 1
-                name = call.function.name
-                print(f"🔧 Tool call: {name}({_format_args(call.function.arguments)})")
+                name = call.name
+                print(f"🔧 Tool call: {name}({_format_args(call.arguments)})")
 
-                result = dispatch(name, call.function.arguments)
+                result = dispatch(name, call.arguments)
 
                 if name == "write_report" and result.startswith("Report saved to"):
                     saved_reports.append(result.split("Report saved to ", 1)[1].split(" (")[0])
@@ -112,57 +109,24 @@ class ResearchAgent:
                 ),
             }
         )
-        message, usage = self._call_model(with_tools=False)
-        tokens_used += usage
-        self.messages.append({"role": "assistant", "content": message.content})
+        reply = self._call_model(with_tools=False)
+        tokens_used += reply.tokens
+        self.messages.append({"role": "assistant", "content": reply.text})
         print(f"\n📊 {settings.max_iterations} step(s), {tool_calls_made} tool call(s), ~{tokens_used} tokens")
-        return message.content or ""
+        return reply.text or ""
 
     # ------------------------------------------------------------------ #
     # helpers
     # ------------------------------------------------------------------ #
 
     def _call_model(self, *, with_tools: bool):
-        """One API call. Returns (message, tokens_used)."""
-        kwargs = {
-            "model": settings.model_name,
-            "messages": self.messages,
-        }
-        # Reasoning models (gpt-5*, o*) accept only the default temperature and
-        # reject temperature=0 with a 400.
-        if not settings.model_name.startswith(("gpt-5", "o1", "o3", "o4")):
-            kwargs["temperature"] = settings.temperature
-        if with_tools:
-            kwargs["tools"] = TOOL_SCHEMAS
-            kwargs["tool_choice"] = "auto"
-
+        """One model call, whichever provider is configured. Returns a Reply."""
         try:
-            response = self.client.chat.completions.create(**kwargs)
-        except OpenAIError as exc:
-            # Roll the conversation back to a clean state so the next user request
-            # does not start from a half-finished exchange.
-            raise RuntimeError(f"model call failed: {type(exc).__name__}: {exc}") from exc
-
-        usage = response.usage.total_tokens if response.usage else 0
-        return response.choices[0].message, usage
-
-    @staticmethod
-    def _assistant_message(message) -> dict:
-        """Convert an SDK response message into a plain protocol dict."""
-        result: dict = {"role": "assistant", "content": message.content}
-        if message.tool_calls:
-            result["tool_calls"] = [
-                {
-                    "id": call.id,
-                    "type": "function",
-                    "function": {
-                        "name": call.function.name,
-                        "arguments": call.function.arguments,
-                    },
-                }
-                for call in message.tool_calls
-            ]
-        return result
+            return self.llm.complete(self.messages, TOOL_SCHEMAS if with_tools else None)
+        except LLMError as exc:
+            # Surfaced as one exception type regardless of provider, so main.py
+            # needs no per-vendor error handling.
+            raise RuntimeError(f"model call failed: {exc}") from exc
 
     def reset(self) -> None:
         """Forget the dialogue, keep the system prompt."""

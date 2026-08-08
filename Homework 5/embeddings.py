@@ -40,9 +40,16 @@ def _openai_client():
     if _client is None:
         from openai import OpenAI
 
-        key = (settings.embedding_api_key.get_secret_value()
-               if settings.embedding_api_key else
-               settings.api_key.get_secret_value())
+        # Falls back to the chat key only because a single OpenAI key serves
+        # both endpoints. With a Claude chat model there is no such key, hence
+        # the explicit error rather than an AttributeError on None.
+        secret = settings.embedding_api_key or settings.api_key
+        if secret is None:
+            raise RuntimeError(
+                f"EMBEDDING_BACKEND={settings.embedding_backend} needs a key: "
+                "set EMBEDDING_API_KEY (or API_KEY) in .env"
+            )
+        key = secret.get_secret_value()
         _client = OpenAI(api_key=key,
                          base_url=settings.embedding_base_url or None,
                          timeout=settings.model_timeout, max_retries=2)

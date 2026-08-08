@@ -1,4 +1,7 @@
 .env
+# Run logs: `python -u ingest.py 2>&1 | tee ingest.log` (see README → Ingestion).
+# Useful locally, meaningless in the repository — they describe one machine's run.
+*.log
 __pycache__/
 *.pyc
 output/

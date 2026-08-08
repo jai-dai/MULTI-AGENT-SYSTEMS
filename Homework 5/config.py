@@ -5,11 +5,31 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Runtime configuration, read from environment variables / .env file."""
 
-    api_key: SecretStr = Field(
+    # ---- the chat model ----
+    # Which wire protocol MODEL_NAME speaks: "auto" | "openai" | "anthropic".
+    # "auto" reads it off the model name (claude* → anthropic), so changing
+    # provider is a MODEL_NAME + key edit and nothing else. See llm.py.
+    llm_backend: str = "auto"
+    model_name: str = "gpt-5.2"
+    # Optional because each backend has its own key and only needs its own:
+    # llm.py raises a clear error if the one it needs is missing.
+    api_key: SecretStr | None = Field(
+        default=None,
         validation_alias=AliasChoices("API_KEY", "OPENAI_API_KEY"),
     )
-    model_name: str = "gpt-5.2"
+    anthropic_api_key: SecretStr | None = Field(
+        default=None,
+        validation_alias=AliasChoices("ANTHROPIC_API_KEY"),
+    )
     temperature: float = 0.0
+    # Required by Anthropic, optional for OpenAI. Below ~16k a non-streaming
+    # request stays clear of SDK HTTP timeouts.
+    max_output_tokens: int = 16000
+    # Claude's safety classifiers can decline a request; with this on, the API
+    # re-runs it on a fallback model inside the same call instead of returning
+    # the refusal. Only applies to the models that support it, and the swap is
+    # printed rather than made silently.
+    anthropic_fallbacks: bool = True
     # Any OpenAI-compatible chat endpoint: DeepSeek (https://api.deepseek.com),
     # Ollama, vLLM, LM Studio. Independent of the embedding backend — retrieved
     # passages arrive here as text, never as vectors.
