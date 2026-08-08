@@ -280,6 +280,18 @@ def render(report: Report) -> str:
     return "\n".join(out)
 
 
+def loads_anything_locally() -> bool:
+    """Is there a model to weigh at all?
+
+    With API embeddings AND reranking off, nothing heavy is loaded and the
+    check has nothing to say — it should not nag. Note that switching
+    embeddings to an API is NOT enough on its own: the cross-encoder runs
+    locally in every configuration and is the larger of the two (1.1 GB for
+    bge-reranker-base against ~0 for an API embedder).
+    """
+    return settings.embedding_backend == "local" or settings.rerank_enabled
+
+
 def guard(*, interactive: bool = None) -> Report:
     """Assess, print, and decide whether to continue.
 
@@ -287,6 +299,9 @@ def guard(*, interactive: bool = None) -> Report:
     a wrong estimate must never make the project unusable.
     """
     if os.environ.get("PREFLIGHT", "").strip().lower() in ("off", "0", "false"):
+        return Report("ok", 0, 0, 0, 0, 0)
+
+    if not loads_anything_locally():
         return Report("ok", 0, 0, 0, 0, 0)
 
     report = assess()

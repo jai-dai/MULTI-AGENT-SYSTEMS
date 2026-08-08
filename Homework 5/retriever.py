@@ -97,6 +97,54 @@ def _reranker():
     return state["reranker"]
 
 
+# One pair the model must score high, one it must score low. The distance
+# between them is the model's usable range on THIS machine, which is the only
+# thing a threshold can honestly be expressed in.
+_PROBE_PAIRS = [
+    ("what is a cat",
+     "A cat is a small domesticated carnivorous mammal often kept as a pet."),
+    ("what is a cat",
+     "Quarterly revenue increased twelve percent year over year."),
+]
+# Where to sit above the measured noise floor: low enough to keep marginal but
+# real passages, high enough that pure noise does not pass.
+_NOISE_MARGIN = 0.15
+
+
+def rerank_threshold() -> float:
+    """The relevance floor, measured for the configured reranker.
+
+    A fixed number does not survive a change of model. RERANK_MIN_SCORE=0.02
+    was calibrated for bge-reranker-base; ms-marco-MiniLM answers on a
+    different scale, and the same 0.02 flagged perfectly good passages as
+    "below the threshold" (observed in the example_output_3 run). So the floor
+    is derived from what the model itself returns for a known-relevant and a
+    known-irrelevant pair, once per process.
+
+    An explicit RERANK_MIN_SCORE in the environment always wins — measurement
+    is the default, not a policy.
+    """
+    state = _load()
+    if state.get("threshold") is not None:
+        return state["threshold"]
+
+    if "rerank_min_score" in settings.model_fields_set:
+        state["threshold"] = settings.rerank_min_score
+        return state["threshold"]
+
+    try:
+        relevant, irrelevant = (float(s) for s in _reranker().predict(_PROBE_PAIRS))
+    except Exception:                       # never let calibration break search
+        state["threshold"] = settings.rerank_min_score
+        return state["threshold"]
+
+    if relevant <= irrelevant:              # model cannot tell them apart
+        state["threshold"] = settings.rerank_min_score
+    else:
+        state["threshold"] = irrelevant + (relevant - irrelevant) * _NOISE_MARGIN
+    return state["threshold"]
+
+
 # --------------------------------------------------------------------------- #
 # stages
 # --------------------------------------------------------------------------- #
@@ -139,7 +187,7 @@ def rerank(query: str, candidates: list[int],
     pairs = [(query, state["chunks"][i]["text"]) for i in candidates]
     scores = [float(s) for s in _reranker().predict(pairs)]
     ranked = sorted(zip(candidates, scores), key=lambda p: p[1], reverse=True)
-    strong = [p for p in ranked if p[1] >= settings.rerank_min_score]
+    strong = [p for p in ranked if p[1] >= rerank_threshold()]
     if strong:
         return strong[:top_n], True
     return ranked[:top_n], False
