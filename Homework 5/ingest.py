@@ -35,7 +35,10 @@ from config import settings
 TEXT_SUFFIXES = {".txt", ".md", ".markdown", ".rst"}
 PDF_SUFFIXES = {".pdf"}
 DOCX_SUFFIXES = {".docx"}
-SUPPORTED = TEXT_SUFFIXES | PDF_SUFFIXES | DOCX_SUFFIXES
+XLSX_SUFFIXES = {".xlsx", ".xlsm"}
+PPTX_SUFFIXES = {".pptx"}
+SUPPORTED = (TEXT_SUFFIXES | PDF_SUFFIXES | DOCX_SUFFIXES
+             | XLSX_SUFFIXES | PPTX_SUFFIXES)
 
 INDEX_FILE = "index.faiss"
 CHUNKS_FILE = "chunks.json"
@@ -76,8 +79,113 @@ def read_docx(path: Path) -> str:
     return "\n".join(parts)
 
 
+def read_xlsx(path: Path) -> list[tuple[str, int]]:
+    """One entry per sheet; rows serialised as "header: value" pairs.
+
+    A spreadsheet row dumped raw — "1200 | 15.03.2024 | Acme Ltd" — embeds
+    badly, because embedding models are trained on prose, not on grids. Written
+    out as "Amount: 1200; Date: 15.03.2024; Counterparty: Acme Ltd" the same row
+    reads like a sentence and lands in a sensible place in vector space. The
+    sheet name goes in too, since "Payments" or "2024 Q3" is often the only
+    thing that says what the numbers are.
+
+    Exact figures and document numbers are still mostly found by BM25 — that is
+    what lexical search is for. This makes them findable semantically as well.
+    """
+    from openpyxl import load_workbook
+
+    # read_only: never loads the whole grid; data_only: formulas as values.
+    book = load_workbook(str(path), read_only=True, data_only=True)
+    out: list[tuple[str, int]] = []
+    try:
+        for index, sheet in enumerate(book.worksheets, start=1):
+            # Excel routinely declares a sheet as 1048575 x 16384 while holding
+            # a dozen rows, and read_only mode believes the declaration: one
+            # real file here took 142 seconds to cross 200k empty rows, and
+            # would have needed ~12 minutes per sheet. reset_dimensions()
+            # recomputes the range from the cells that exist — same 14 rows of
+            # data, 0.35 seconds.
+            if hasattr(sheet, "reset_dimensions"):
+                sheet.reset_dimensions()
+            lines = [f"Sheet: {sheet.title}"]
+            headers: list[str] | None = None
+            blank_run = 0
+            for row in sheet.iter_rows(values_only=True):
+                cells = ["" if c is None else str(c).strip() for c in row]
+                if not any(cells):
+                    # Second guard, for files where even the recomputed range
+                    # is wrong: a long silence means the data has ended.
+                    blank_run += 1
+                    if blank_run > settings.xlsx_blank_run_limit:
+                        break
+                    continue
+                blank_run = 0
+                if headers is None:                 # first non-empty row
+                    headers = cells
+                    lines.append(" | ".join(h for h in cells if h))
+                    continue
+                pairs = [f"{h}: {v}" for h, v in zip(headers, cells) if v and h]
+                lines.append("; ".join(pairs) if pairs
+                             else " | ".join(c for c in cells if c))
+            if len(lines) > 1:
+                out.append(("\n".join(lines), index))
+    finally:
+        book.close()
+    return out
+
+
+def read_pptx(path: Path) -> list[tuple[str, int]]:
+    """One entry per slide: shapes, tables and the speaker notes.
+
+    The notes are the point. A slide often carries three words and a picture,
+    while what the presenter actually meant is written underneath — so a reader
+    that takes only the visible text indexes the least informative half.
+    """
+    from pptx import Presentation
+
+    deck = Presentation(str(path))
+    out: list[tuple[str, int]] = []
+    for index, slide in enumerate(deck.slides, start=1):
+        parts: list[str] = []
+        for shape in slide.shapes:
+            if shape.has_text_frame and shape.text_frame.text.strip():
+                parts.append(shape.text_frame.text.strip())
+            if getattr(shape, "has_table", False):
+                for row in shape.table.rows:
+                    cells = [c.text.strip() for c in row.cells if c.text.strip()]
+                    if cells:
+                        parts.append(" | ".join(cells))
+        if slide.has_notes_slide and slide.notes_slide.notes_text_frame:
+            notes = slide.notes_slide.notes_text_frame.text.strip()
+            if notes:
+                parts.append(f"Notes: {notes}")
+        if parts:
+            out.append(("\n".join(parts), index))
+    return out
+
+
 def read_document(path: Path) -> list[tuple[str, int]]:
-    """Return [(text, page)] — one entry per PDF page, one for other formats."""
+    """Return [(text, locator)].
+
+    The locator is a page for PDFs, a sheet number for spreadsheets, a slide
+    number for decks, and 1 for formats without any structure of their own.
+    """
+    suffix = path.suffix.lower()
+
+    if suffix in XLSX_SUFFIXES:
+        try:
+            return read_xlsx(path)
+        except Exception as exc:
+            print(f"   ! {path.name}: {type(exc).__name__}: {exc}")
+            return []
+
+    if suffix in PPTX_SUFFIXES:
+        try:
+            return read_pptx(path)
+        except Exception as exc:
+            print(f"   ! {path.name}: {type(exc).__name__}: {exc}")
+            return []
+
     if path.suffix.lower() in DOCX_SUFFIXES:
         try:
             text = read_docx(path)
@@ -88,7 +196,11 @@ def read_document(path: Path) -> list[tuple[str, int]]:
 
     if path.suffix.lower() in PDF_SUFFIXES:
         pages = []
-        reader = PdfReader(str(path))
+        try:
+            reader = PdfReader(str(path))
+        except Exception as exc:          # encrypted, truncated, not really a PDF
+            print(f"   ! {path.name}: {type(exc).__name__}: {exc}")
+            return []
         for number, page in enumerate(reader.pages, start=1):
             try:
                 text = page.extract_text() or ""
@@ -252,11 +364,15 @@ def load_vectors() -> np.ndarray | None:
     return index.reconstruct_n(0, index.ntotal)
 
 
-def save_state(chunks: list[dict], files: dict, vectors: np.ndarray) -> None:
+def save_state(chunks: list[dict], files: dict, vectors: np.ndarray,
+               barren: list[str] = None) -> None:
     directory = index_dir()
     manifest = {
         "embedding": {**emb.signature(), "dim": int(vectors.shape[1])},
         "files": files,
+        # Kept so the list survives the run: these are the documents a later
+        # OCR pass has to target.
+        "no_text": sorted(barren or []),
     }
     index = faiss.IndexFlatIP(vectors.shape[1])
     index.add(vectors)
@@ -310,14 +426,25 @@ def ingest(dirs: list[str] | None = None, rebuild: bool = False) -> dict:
 
     kept = list(chunks)
     fresh: list[dict] = []
+    barren: list[str] = []          # files that produced no text at all
     for path in files:
         digest = file_digest(path)
         if manifest.get(str(path)) == digest:
             print(f" = {path.name} (unchanged)")
             continue
-        print(f" + {path.name}")
+        produced = chunk_document(path, digest)
+        if not produced:
+            # A file that yields nothing is the quietest failure in the whole
+            # pipeline: it is recorded as processed, contributes no chunks, and
+            # the agent later answers "not in the knowledge base" about a
+            # document that is sitting right there. Measured on a real corpus:
+            # ~15% of PDFs were scans with no text layer at all.
+            print(f" ∅ {path.name} — no text extracted")
+            barren.append(str(path))
+        else:
+            print(f" + {path.name}")
         kept = [c for c in kept if c["path"] != str(path)]   # replace, never duplicate
-        fresh.extend(chunk_document(path, digest))
+        fresh.extend(produced)
         manifest[str(path)] = digest
 
     for known_path in list(manifest):                        # deleted on disk
@@ -347,10 +474,22 @@ def ingest(dirs: list[str] | None = None, rebuild: bool = False) -> dict:
         return {"files": len(manifest), "chunks": 0, "embedded": 0}
 
     final_vectors = np.stack(stack).astype("float32")
-    save_state(final_chunks, manifest, final_vectors)
+    save_state(final_chunks, manifest, final_vectors, barren)
     print(f"\nindex saved to {index_dir()}")
     print(f"  files: {len(manifest)} | chunks: {len(final_chunks)} | "
           f"newly embedded: {len(fresh)} | dim: {final_vectors.shape[1]}")
+
+    if barren:
+        print(f"\n⚠️  {len(barren)} file(s) produced NO text and are in the "
+              "index in name only:")
+        for path_str in barren[:10]:
+            print(f"     ∅ {Path(path_str).name}")
+        if len(barren) > 10:
+            print(f"     … and {len(barren) - 10} more (full list in "
+                  f"{MANIFEST_FILE} under \"no_text\")")
+        print("   Most often these are scanned PDFs — images with no text "
+              "layer. They need OCR; until then the agent will honestly say "
+              "it knows nothing about them.")
     return {"files": len(manifest), "chunks": len(final_chunks),
             "embedded": len(fresh)}
 

@@ -43,6 +43,9 @@ class Settings(BaseSettings):
     # checkout otherwise contributes hundreds of READMEs and package docs,
     # which then surface in search as confident noise.
     exclude_dirs: str = ".git,.venv,node_modules,__pycache__,site-packages,dist,build"
+    # Stop scanning a spreadsheet after this many consecutive empty rows.
+    # Excel declares sheets far larger than their contents; see read_xlsx.
+    xlsx_blank_run_limit: int = 2000
     index_dir: str = "index"
     chunk_size: int = 500
     chunk_overlap: int = 100
