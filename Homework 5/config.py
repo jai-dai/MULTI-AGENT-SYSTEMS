@@ -38,6 +38,11 @@ class Settings(BaseSettings):
     # Comma-separated list of directories to ingest. Another corpus is added
     # here, not by editing code: DATA_DIR="data,/Users/me/docs/specs"
     data_dir: str = "data"
+    # Directory names never descended into. Hidden directories (.git, .venv)
+    # are skipped regardless. A documents folder that also holds a code
+    # checkout otherwise contributes hundreds of READMEs and package docs,
+    # which then surface in search as confident noise.
+    exclude_dirs: str = ".git,.venv,node_modules,__pycache__,site-packages,dist,build"
     index_dir: str = "index"
     chunk_size: int = 500
     chunk_overlap: int = 100

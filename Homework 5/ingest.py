@@ -19,6 +19,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -33,7 +34,8 @@ from config import settings
 
 TEXT_SUFFIXES = {".txt", ".md", ".markdown", ".rst"}
 PDF_SUFFIXES = {".pdf"}
-SUPPORTED = TEXT_SUFFIXES | PDF_SUFFIXES
+DOCX_SUFFIXES = {".docx"}
+SUPPORTED = TEXT_SUFFIXES | PDF_SUFFIXES | DOCX_SUFFIXES
 
 INDEX_FILE = "index.faiss"
 CHUNKS_FILE = "chunks.json"
@@ -53,8 +55,37 @@ def file_digest(path: Path) -> str:
     return h.hexdigest()
 
 
+def read_docx(path: Path) -> str:
+    """Paragraphs and table cells of a Word document, in reading order.
+
+    Tables matter more than they look: in the kind of documents people actually
+    keep — contracts, invoices, specifications — the numbers live in tables,
+    and a reader that takes only paragraphs silently drops exactly the part
+    someone will search for. Word has no page concept in the file, so every
+    chunk is recorded as page 1.
+    """
+    from docx import Document
+
+    document = Document(str(path))
+    parts = [p.text.strip() for p in document.paragraphs if p.text.strip()]
+    for table in document.tables:
+        for row in table.rows:
+            cells = [c.text.strip() for c in row.cells if c.text.strip()]
+            if cells:
+                parts.append(" | ".join(cells))
+    return "\n".join(parts)
+
+
 def read_document(path: Path) -> list[tuple[str, int]]:
-    """Return [(text, page)] — one entry per PDF page, one for a text file."""
+    """Return [(text, page)] — one entry per PDF page, one for other formats."""
+    if path.suffix.lower() in DOCX_SUFFIXES:
+        try:
+            text = read_docx(path)
+        except Exception as exc:
+            print(f"   ! {path.name}: {type(exc).__name__}: {exc}")
+            return []
+        return [(text, 1)] if text.strip() else []
+
     if path.suffix.lower() in PDF_SUFFIXES:
         pages = []
         reader = PdfReader(str(path))
@@ -71,6 +102,15 @@ def read_document(path: Path) -> list[tuple[str, int]]:
 
 
 def discover(dirs: list[str]) -> list[Path]:
+    """Find ingestible files, pruning directories that are not a corpus.
+
+    Pointing this at a real folder taught the lesson: a documents directory
+    that also holds a git clone contributes hundreds of READMEs and package
+    docs from `.venv`, and they surface in search as confident noise. Hidden
+    directories and the names in EXCLUDE_DIRS are pruned during the walk, so
+    the tree is never even descended.
+    """
+    excluded = {d.strip() for d in settings.exclude_dirs.split(",") if d.strip()}
     found: list[Path] = []
     for raw in dirs:
         root = Path(raw).expanduser()
@@ -79,9 +119,12 @@ def discover(dirs: list[str]) -> list[Path]:
         if not root.exists():
             print(f"   ! directory not found, skipped: {root}")
             continue
-        for path in sorted(root.rglob("*")):
-            if path.is_file() and path.suffix.lower() in SUPPORTED:
-                found.append(path)
+        for current, subdirs, files in os.walk(root):
+            subdirs[:] = sorted(d for d in subdirs
+                                if d not in excluded and not d.startswith("."))
+            for name in sorted(files):
+                if Path(name).suffix.lower() in SUPPORTED and not name.startswith("."):
+                    found.append(Path(current) / name)
     return found
 
 
