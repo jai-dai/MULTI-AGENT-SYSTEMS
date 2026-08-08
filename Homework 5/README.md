@@ -241,7 +241,7 @@ index/        index.faiss · chunks.json · manifest.json   (не комітит
 |---|---|---|---|---|
 | **Чанкер** | текст документа | шматки тексту | `split_text()` в `ingest.py` | — |
 | **OCR** | зображення сторінки | текст | `ocr.py` | Vision / tesseract |
-| **Ембеддер** | текст | **числа** (768 або 1536) | sentence-transformers · OpenAI API · Ollama | **e5-base** · bge-m3 · text-embedding-3-small · nomic-embed-text |
+| **Ембеддер** | текст | **числа** (768 або 1536) | sentence-transformers · OpenAI API · Ollama | e5-base · **bge-m3** · text-embedding-3-small · nomic-embed-text |
 | **Сховище векторів** | вектор запиту | **номери** схожих | FAISS (або Qdrant) | — |
 | **Реранкер** | пара (запит, пасаж) | оцінка релевантності | sentence-transformers | bge-reranker-base · ms-marco-MiniLM |
 
