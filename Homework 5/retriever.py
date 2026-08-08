@@ -226,6 +226,9 @@ def retrieve(query: str, top_k: int = None, top_n: int = None) -> dict:
         "score": round(score, 4),
         "in_semantic": i in semantic,
         "in_bm25": i in lexical,
+        # Recognised from an image, so the wording may carry OCR errors —
+        # the reader has to know that before quoting it verbatim.
+        "ocr": bool(chunks[i].get("ocr")),
     } for i, score in ranked]
 
     return {"results": results, "confident": confident,

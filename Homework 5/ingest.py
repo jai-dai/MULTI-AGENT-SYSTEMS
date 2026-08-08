@@ -30,7 +30,13 @@ import faiss
 import numpy as np
 from pypdf import PdfReader
 
+import ocr
 from config import settings
+
+# Pages recovered by OCR, as (path, page). Recognition makes mistakes, so a
+# chunk that came from an image is flagged and the agent is told to treat its
+# wording with care.
+ocr_pages: set[tuple[str, int]] = set()
 
 TEXT_SUFFIXES = {".txt", ".md", ".markdown", ".rst"}
 PDF_SUFFIXES = {".pdf"}
@@ -195,7 +201,8 @@ def read_document(path: Path) -> list[tuple[str, int]]:
         return [(text, 1)] if text.strip() else []
 
     if path.suffix.lower() in PDF_SUFFIXES:
-        pages = []
+        pages: list[tuple[str, int]] = []
+        unreadable: list[int] = []
         try:
             reader = PdfReader(str(path))
         except Exception as exc:          # encrypted, truncated, not really a PDF
@@ -207,8 +214,20 @@ def read_document(path: Path) -> list[tuple[str, int]]:
             except Exception as exc:              # one broken page is not fatal
                 print(f"   ! {path.name} p.{number}: {type(exc).__name__}: {exc}")
                 continue
-            if text.strip():
+            if len(text.strip()) >= settings.ocr_min_chars:
                 pages.append((text, number))
+            else:
+                unreadable.append(number)
+
+        # Only the pages that gave nothing go to OCR — it costs seconds per
+        # page, against milliseconds for a text layer.
+        if unreadable and ocr.resolve_backend() != "off":
+            print(f"   ↻ {path.name}: {len(unreadable)} page(s) without text → "
+                  f"{ocr.describe()}")
+            for text, number in ocr.ocr_pdf_pages(path, unreadable):
+                pages.append((text, number))
+                ocr_pages.add((str(path), number))
+        pages.sort(key=lambda item: item[1])
         return pages
     return [(path.read_text(encoding="utf-8", errors="replace"), 1)]
 
@@ -299,14 +318,17 @@ def chunk_document(path: Path, digest: str) -> list[dict]:
     for text, page in read_document(path):
         pieces = split_text(text, settings.chunk_size, settings.chunk_overlap)
         for position, body in enumerate(pieces):
-            chunks.append({
+            chunk = {
                 "id": hashlib.sha256(
                     f"{digest}:{page}:{position}".encode()).hexdigest()[:16],
                 "text": body,
                 "source": path.name,
                 "path": str(path),
                 "page": page,
-            })
+            }
+            if (str(path), page) in ocr_pages:
+                chunk["ocr"] = True
+            chunks.append(chunk)
     return chunks
 
 

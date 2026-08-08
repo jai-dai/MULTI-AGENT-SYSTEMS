@@ -272,8 +272,10 @@ def knowledge_search(query: str, top_n: int = settings.rerank_top_n) -> str:
     for i, r in enumerate(results, start=1):
         origin = "+".join(name for name, on in
                           (("semantic", r["in_semantic"]), ("bm25", r["in_bm25"])) if on)
+        marker = " OCR" if r.get("ocr") else ""
         blocks.append(
-            f"\n{i}. [{r['source']} p.{r['page']}] score={r['score']} via {origin}\n"
+            f"\n{i}. [{r['source']} p.{r['page']}]{marker} score={r['score']} "
+            f"via {origin}\n"
             f"{_truncate(r['text'], settings.max_url_content_length)}")
     return header + "\n" + "\n".join(blocks)
 

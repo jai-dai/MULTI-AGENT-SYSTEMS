@@ -46,6 +46,19 @@ class Settings(BaseSettings):
     # Stop scanning a spreadsheet after this many consecutive empty rows.
     # Excel declares sheets far larger than their contents; see read_xlsx.
     xlsx_blank_run_limit: int = 2000
+
+    # ---- OCR (scanned PDFs) ----
+    # off | auto | vision | tesseract. "auto" prefers Apple Vision, which is
+    # built into macOS, and falls back to tesseract where that exists.
+    ocr_backend: str = "auto"
+    ocr_languages: str = "uk,ru,en"
+    ocr_dpi: int = 200
+    # A page yielding fewer characters than this is treated as un-extracted and
+    # sent to OCR. Headers and page numbers alone can reach a few dozen.
+    ocr_min_chars: int = 50
+    # OCR costs seconds per page; a 300-page scan would stall the whole run.
+    ocr_max_pages: int = 40
+    tesseract_cmd: str = "tesseract"
     index_dir: str = "index"
     chunk_size: int = 500
     chunk_overlap: int = 100
@@ -120,6 +133,10 @@ them, and you produce source-backed Markdown reports.
   different terms before concluding the base has no answer.
 - Passages carry `[source.pdf p.N]`. Cite them in that form; never invent a
   page number.
+- A passage marked `OCR` was recognised from a scanned image. The meaning is
+  usually right, individual characters and dates may not be. Do not quote such
+  a passage word for word as if it were the document's own wording, and say
+  that it came from a scan when the exact figure matters.
 - If a result is marked "below the relevance threshold", treat it as weak
   evidence and check it against the web before relying on it.
 
