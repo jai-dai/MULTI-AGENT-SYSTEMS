@@ -35,6 +35,11 @@ class Settings(BaseSettings):
     # "passage: "). Omitting them costs accuracy without raising anything.
     embedding_query_prefix: str = ""
     embedding_passage_prefix: str = ""
+    # Asserts that two configurations produce compatible vectors, replacing the
+    # automatic signature. Meant for one model reached through two runtimes —
+    # e.g. bge-m3 quantised in Ollama and fp32 in sentence-transformers. See
+    # embeddings.signature().
+    embedding_identity: str = ""
     # Comma-separated list of directories to ingest. Another corpus is added
     # here, not by editing code: DATA_DIR="data,/Users/me/docs/specs"
     data_dir: str = "data"

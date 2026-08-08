@@ -114,7 +114,23 @@ def signature() -> dict:
     dimension alone is not enough: text-embedding-3-small and bge-m3 differ,
     but two unrelated 1024-dim models would pass a width check while returning
     neighbours that mean nothing.
+
+    EMBEDDING_IDENTITY overrides the whole comparison when set. The case it
+    exists for: the SAME model reached through different runtimes. Ollama
+    serves a quantised bge-m3 as "bge-m3"; sentence-transformers loads the
+    fp32 weights as "BAAI/bge-m3". Same architecture, same training, vectors
+    that agree to about three decimal places — but nothing in the code can
+    prove that, so by default the mismatch is refused. Setting
+    EMBEDDING_IDENTITY=bge-m3 in both configurations is you asserting the
+    equivalence, and it lets an index built on one runtime be queried from the
+    other without re-embedding the corpus.
+
+    Note this is an assertion, not a check: point it at two genuinely different
+    models and retrieval degrades silently, which is exactly what the default
+    behaviour prevents.
     """
+    if settings.embedding_identity:
+        return {"identity": settings.embedding_identity}
     return {
         "backend": settings.embedding_backend,
         "model": settings.embedding_model,
