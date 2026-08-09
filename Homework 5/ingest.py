@@ -29,6 +29,7 @@ private corpus can be grown one folder at a time.
 from __future__ import annotations
 
 import argparse
+import fnmatch
 import hashlib
 import json
 import os
@@ -38,11 +39,11 @@ from pathlib import Path
 # `embeddings` first: with the local backend it initialises torch, which must
 # precede faiss on macOS (see the note in retriever.py).
 import embeddings as emb  # isort: skip
-import faiss
 import numpy as np
 from pypdf import PdfReader
 
 import ocr
+import vectorstore
 from config import settings
 
 # Pages recovered by OCR, as (path, page). Recognition makes mistakes, so a
@@ -244,6 +245,13 @@ def read_document(path: Path) -> list[tuple[str, int]]:
     return [(path.read_text(encoding="utf-8", errors="replace"), 1)]
 
 
+def is_excluded(name: str) -> bool:
+    """Does this filename match EXCLUDE_FILES? (fnmatch, case-insensitive)"""
+    lowered = name.lower()
+    return any(fnmatch.fnmatch(lowered, pattern.strip().lower())
+               for pattern in settings.exclude_files.split(",") if pattern.strip())
+
+
 def discover(dirs: list[str]) -> list[Path]:
     """Find ingestible files, pruning directories that are not a corpus.
 
@@ -252,9 +260,16 @@ def discover(dirs: list[str]) -> list[Path]:
     docs from `.venv`, and they surface in search as confident noise. Hidden
     directories and the names in EXCLUDE_DIRS are pruned during the walk, so
     the tree is never even descended.
+
+    EXCLUDE_FILES prunes by filename for a different reason: some files are not
+    documents (Office `~$` lock files), and some must never become searchable
+    (keys, recovery codes). What was skipped is printed rather than dropped in
+    silence — an exclusion that quietly swallows a wanted document is the same
+    class of failure as a document that quietly yields no text.
     """
     excluded = {d.strip() for d in settings.exclude_dirs.split(",") if d.strip()}
     found: list[Path] = []
+    skipped: list[str] = []
     for raw in dirs:
         root = Path(raw).expanduser()
         if not root.is_absolute():
@@ -266,9 +281,53 @@ def discover(dirs: list[str]) -> list[Path]:
             subdirs[:] = sorted(d for d in subdirs
                                 if d not in excluded and not d.startswith("."))
             for name in sorted(files):
-                if Path(name).suffix.lower() in SUPPORTED and not name.startswith("."):
-                    found.append(Path(current) / name)
+                if Path(name).suffix.lower() not in SUPPORTED or name.startswith("."):
+                    continue
+                if is_excluded(name):
+                    skipped.append(name)
+                    continue
+                found.append(Path(current) / name)
+    if skipped:
+        print(f"   ⊘ {len(skipped)} file(s) skipped by EXCLUDE_FILES: "
+              + ", ".join(skipped[:6]) + (" …" if len(skipped) > 6 else ""))
     return found
+
+
+def text_key(text: str) -> str:
+    """Identity of a chunk's CONTENT, insensitive to whitespace and case.
+
+    Two exports of one document (.docx and .pdf side by side) rarely differ in
+    words but often differ in spacing, so comparing raw strings would call them
+    different and index both.
+    """
+    return hashlib.sha256(" ".join(text.split()).lower().encode("utf-8")).hexdigest()
+
+
+def collapse_duplicates(pairs: list[tuple[dict, np.ndarray]]
+                        ) -> tuple[list[tuple[dict, np.ndarray]], int]:
+    """Keep the first chunk of each distinct text, drop the rest.
+
+    Measured on a real corpus: 1637 of 8121 chunks (20%) were exact repeats —
+    the same document stored as both .docx and .pdf, "— копия" files, and
+    spreadsheets whose own text repeats a row. The cost is not disk. Retrieval
+    returned the SAME passage three times for one query, so the three
+    RERANK_TOP_N slots that should have carried three facts carried one, and
+    the reranker cannot help: to it they are three different chunks.
+
+    First occurrence wins, so an incremental run never re-orders what is
+    already indexed. The trade-off, stated plainly: if the file that won is
+    later deleted, its text leaves with it even though a copy is still on
+    disk — `--rebuild` puts it back.
+    """
+    seen: set[str] = set()
+    kept: list[tuple[dict, np.ndarray]] = []
+    for chunk, vector in pairs:
+        key = text_key(chunk["text"])
+        if key in seen:
+            continue
+        seen.add(key)
+        kept.append((chunk, vector))
+    return kept, len(pairs) - len(kept)
 
 
 # --------------------------------------------------------------------------- #
@@ -314,15 +373,41 @@ def split_text(text: str, size: int, overlap: int) -> list[str]:
         if current:
             chunks.append(current)
 
-        # Overlap: carry the tail of each chunk into the next, so a fact
-        # sitting on a boundary stays retrievable from either side.
-        if overlap > 0 and len(chunks) > 1:
-            stitched = [chunks[0]]
-            for previous, chunk in zip(chunks, chunks[1:]):
-                stitched.append((previous[-overlap:] + " " + chunk).strip())
-            chunks = stitched
-        return [c for c in chunks if c.strip()]
+        return [c for c in stitch(chunks, overlap) if c.strip()]
     return [text]
+
+
+def carry_tail(previous: str, overlap: int) -> str:
+    """The tail of one chunk, carried into the next — cut at a WORD boundary.
+
+    `previous[-overlap:]` is a raw character slice, so it lands mid-word almost
+    every time. Measured on the built index: 70.8% of chunks (4562 of 6448)
+    began with a word fragment — "s those stated in clause 4.1…" is the tail of
+    "as". The embedder then sees a junk first token, the reranker sees it too,
+    and the agent quotes it into the report verbatim.
+
+    A tail with no space in it at all is dropped rather than truncated: one
+    unbroken 100-character token carries no context worth keeping.
+    """
+    if overlap <= 0 or not previous:
+        return ""
+    tail = previous[-overlap:]
+    if len(previous) > overlap:            # the slice actually cut something
+        space = tail.find(" ")
+        tail = tail[space + 1:] if space != -1 else ""
+    return tail.strip()
+
+
+def stitch(chunks: list[str], overlap: int) -> list[str]:
+    """Carry each chunk's tail into the next, so a fact sitting on a boundary
+    stays retrievable from either side."""
+    if overlap <= 0 or len(chunks) < 2:
+        return chunks
+    out = [chunks[0]]
+    for previous, chunk in zip(chunks, chunks[1:]):
+        tail = carry_tail(previous, overlap)
+        out.append(f"{tail} {chunk}".strip() if tail else chunk)
+    return out
 
 
 def chunk_document(path: Path, digest: str) -> list[dict]:
@@ -389,13 +474,8 @@ def load_manifest() -> tuple[dict, dict | None]:
 
 
 def load_vectors() -> np.ndarray | None:
-    path = index_dir() / INDEX_FILE
-    if not path.exists():
-        return None
-    index = faiss.read_index(str(path))
-    if index.ntotal == 0:
-        return None
-    return index.reconstruct_n(0, index.ntotal)
+    store = vectorstore.get_store()
+    return store.all_vectors() if store.exists() else None
 
 
 def save_state(chunks: list[dict], files: dict, vectors: np.ndarray,
@@ -408,9 +488,7 @@ def save_state(chunks: list[dict], files: dict, vectors: np.ndarray,
         # OCR pass has to target.
         "no_text": sorted(barren or []),
     }
-    index = faiss.IndexFlatIP(vectors.shape[1])
-    index.add(vectors)
-    faiss.write_index(index, str(directory / INDEX_FILE))
+    vectorstore.get_store().write(vectors, chunks)
     (directory / CHUNKS_FILE).write_text(
         json.dumps(chunks, ensure_ascii=False), encoding="utf-8")
     (directory / MANIFEST_FILE).write_text(
@@ -493,21 +571,47 @@ def ingest(dirs: list[str] | None = None, rebuild: bool = False) -> dict:
 
     fresh_vectors = None
     if fresh:
+        # Drop repeats BEFORE paying for them. collapse_duplicates() below is
+        # the safety net and runs over everything, but by then the vectors are
+        # bought: on this corpus 20% of chunks are duplicates, which is ~50
+        # minutes of embedding computed and immediately thrown away.
+        seen = {text_key(chunk["text"]) for chunk in kept if chunk["id"] in known}
+        unique: list[dict] = []
+        for chunk in fresh:
+            key = text_key(chunk["text"])
+            if key in seen:
+                continue
+            seen.add(key)
+            unique.append(chunk)
+        if len(unique) < len(fresh):
+            print(f"   ⊙ {len(fresh) - len(unique)} duplicate chunk(s) skipped "
+                  "before embedding")
+            fresh = unique
         print(f"embedding {len(fresh)} new chunk(s) with "
               f"{emb.describe(emb.signature())}")
         fresh_vectors = embed([c["text"] for c in fresh])
 
-    # Chunks and vectors are rebuilt in ONE order; a mismatch here would make
-    # the index answer with somebody else's text.
-    final_chunks = kept + fresh
-    stack = [known[c["id"]] for c in kept if c["id"] in known]
+    # Chunks and vectors are carried as PAIRS from here on. They used to be two
+    # lists filtered by different conditions, which is how a chunk without a
+    # vector could stay in chunks.json and shift every later row by one — the
+    # index then answers with somebody else's text, confidently and silently.
+    paired: list[tuple[dict, np.ndarray]] = [
+        (chunk, known[chunk["id"]]) for chunk in kept if chunk["id"] in known
+    ]
     if fresh_vectors is not None:
-        stack.extend(fresh_vectors)
-    if not stack:
+        paired.extend(zip(fresh, fresh_vectors))
+
+    paired, dropped = collapse_duplicates(paired)
+    if dropped:
+        print(f"   ⊙ {dropped} duplicate chunk(s) collapsed "
+              "(same text already in the index)")
+
+    if not paired:
         print("nothing indexed.")
         return {"files": len(manifest), "chunks": 0, "embedded": 0}
 
-    final_vectors = np.stack(stack).astype("float32")
+    final_chunks = [chunk for chunk, _ in paired]
+    final_vectors = np.stack([vector for _, vector in paired]).astype("float32")
     save_state(final_chunks, manifest, final_vectors, barren)
     print(f"\nindex saved to {index_dir()}")
     print(f"  files: {len(manifest)} | chunks: {len(final_chunks)} | "
@@ -528,15 +632,89 @@ def ingest(dirs: list[str] | None = None, rebuild: bool = False) -> dict:
             "embedded": len(fresh)}
 
 
+def clean() -> dict:
+    """Apply the current EXCLUDE_FILES and de-duplication policy in place.
+
+    Nothing is read from the source documents and nothing is embedded: every
+    surviving chunk already has its vector in the index, and dropping rows from
+    a flat index is just keeping the rows that stay. That matters when the
+    corpus took four hours to embed and the reason to clean it — a secret that
+    should never have been indexed — is urgent.
+
+    Not a substitute for the policy at ingest time: this removes what is
+    already there, `discover()` prevents it from arriving.
+    """
+    directory = index_dir()
+    chunks, vectors = load_chunks(), load_vectors()
+    if not chunks or vectors is None:
+        print(f"no index in {directory} — nothing to clean.")
+        return {"files": 0, "chunks": 0, "removed": 0}
+    if len(chunks) != len(vectors):
+        print("   ! index and chunk list disagree — run --rebuild instead.")
+        raise SystemExit(2)
+
+    raw = json.loads((directory / MANIFEST_FILE).read_text(encoding="utf-8"))
+    manifest, barren = raw.get("files", {}), raw.get("no_text", [])
+    before = len(chunks)
+
+    def name_of(chunk: dict) -> str:
+        return chunk.get("source") or Path(chunk["path"]).name
+
+    excluded_sources = sorted({name_of(c) for c in chunks if is_excluded(name_of(c))})
+    paired = [(c, v) for c, v in zip(chunks, vectors) if not is_excluded(name_of(c))]
+    by_policy = before - len(paired)
+
+    paired, duplicates = collapse_duplicates(paired)
+
+    # A file barred by policy must also leave the manifest, or the next run
+    # sees it as "already indexed" and never notices it is gone.
+    manifest = {p: d for p, d in manifest.items() if not is_excluded(Path(p).name)}
+    barren = [p for p in barren if not is_excluded(Path(p).name)]
+
+    if not paired:
+        print("everything was removed — refusing to write an empty index.")
+        raise SystemExit(2)
+
+    final_chunks = [c for c, _ in paired]
+    final_vectors = np.stack([v for _, v in paired]).astype("float32")
+    save_state(final_chunks, manifest, final_vectors, barren)
+
+    print(f"cleaned {directory}")
+    if excluded_sources:
+        print(f"  ⊘ removed by EXCLUDE_FILES ({by_policy} chunk(s)): "
+              + ", ".join(excluded_sources))
+    print(f"  ⊙ duplicate chunks collapsed: {duplicates}")
+    print(f"  chunks: {before} → {len(final_chunks)} "
+          f"(−{before - len(final_chunks)}, "
+          f"{100 * (before - len(final_chunks)) / before:.1f}%)")
+    print(f"  files in manifest: {len(manifest)}")
+    return {"files": len(manifest), "chunks": len(final_chunks),
+            "removed": before - len(final_chunks)}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build the knowledge index.")
     parser.add_argument("--dirs", help="comma-separated directories to ingest")
     parser.add_argument("--rebuild", action="store_true",
                         help="discard the existing index and embed everything")
+    parser.add_argument("--migrate-store", metavar="FROM:TO",
+                        help="move vectors between engines without re-embedding, "
+                             "e.g. --migrate-store faiss:qdrant")
+    parser.add_argument("--clean", action="store_true",
+                        help="apply EXCLUDE_FILES and de-duplication to the "
+                             "existing index without re-embedding anything")
     args = parser.parse_args()
     dirs = [d.strip() for d in args.dirs.split(",")] if args.dirs else None
     try:
-        ingest(dirs, rebuild=args.rebuild)
+        if args.migrate_store:
+            source, _, target = args.migrate_store.partition(":")
+            moved = vectorstore.migrate(source, target)
+            print(f"moved {moved} vectors {source} → {target} in {index_dir()}")
+            print(f"set VECTOR_BACKEND={target} in .env to use it")
+        elif args.clean:
+            clean()
+        else:
+            ingest(dirs, rebuild=args.rebuild)
     except KeyboardInterrupt:
         print("\ninterrupted; the previous index is untouched.")
         sys.exit(130)

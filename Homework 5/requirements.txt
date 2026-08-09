@@ -22,6 +22,9 @@ pyobjc-framework-Vision==12.2.1; sys_platform == "darwin"
 pyobjc-framework-Quartz==12.2.1; sys_platform == "darwin"
 pytesseract==0.3.13
 faiss-cpu==1.15.0
+# Vector store, swappable with FAISS (VECTOR_BACKEND). Runs EMBEDDED in
+# local mode — no server, no Docker.
+qdrant-client==1.19.0
 rank-bm25==0.2.2
 sentence-transformers==3.3.1
 

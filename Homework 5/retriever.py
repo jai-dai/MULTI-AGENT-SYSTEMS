@@ -33,7 +33,7 @@ from pathlib import Path
 # model itself is still loaded lazily, on first use.
 import torch  # noqa: F401  # isort: skip  (must precede faiss)
 import embeddings as emb  # isort: skip
-import faiss
+import vectorstore  # isort: skip
 import numpy as np
 
 from config import settings
@@ -58,18 +58,20 @@ def _load() -> dict:
         return _state
 
     directory = _index_dir()
-    index_path, chunks_path = directory / "index.faiss", directory / "chunks.json"
-    if not index_path.exists() or not chunks_path.exists():
+    chunks_path = directory / "chunks.json"
+    store = vectorstore.get_store()
+    if not store.exists() or not chunks_path.exists():
         raise FileNotFoundError(
-            f"no knowledge index in {directory} — run `python ingest.py` first")
+            f"no {store.name} knowledge index in {directory} — run "
+            "`python ingest.py` first")
 
     from rank_bm25 import BM25Okapi
 
     chunks = json.loads(chunks_path.read_text(encoding="utf-8"))
-    index = faiss.read_index(str(index_path))
-    if index.ntotal != len(chunks):
+    total = store.open()
+    if total != len(chunks):
         raise RuntimeError(
-            f"index holds {index.ntotal} vectors but {len(chunks)} chunks are "
+            f"index holds {total} vectors but {len(chunks)} chunks are "
             "stored — stale index, re-run `python ingest.py --rebuild`")
 
     # The query is embedded by whatever is configured NOW; the index was built
@@ -82,7 +84,7 @@ def _load() -> dict:
 
     _state.update({
         "chunks": chunks,
-        "index": index,
+        "store": store,
         "bm25": BM25Okapi([_tokenize(c["text"]) for c in chunks]),
         "reranker": None,
     })
@@ -150,20 +152,48 @@ def rerank_threshold() -> float:
 # --------------------------------------------------------------------------- #
 
 
-def semantic_search(query: str, top_k: int) -> list[int]:
+def resolve_sources(pattern: str) -> list[str]:
+    """Filename substring -> the exact filenames it matches.
+
+    The substring is resolved HERE, where the chunk list already lives, so the
+    store only ever receives exact values. That keeps the Qdrant filter free of
+    a payload text index and keeps both backends fed by the same input.
+    """
+    needle = pattern.strip().lower()
+    if not needle:
+        return []
+    return sorted({c["source"] for c in _load()["chunks"]
+                   if needle in c["source"].lower()})
+
+
+def semantic_search(query: str, top_k: int,
+                    sources: list[str] | None = None) -> list[int]:
     state = _load()
     # is_query=True: prefix-trained models score their own "query:" side
     # differently from the "passage:" side used at ingest time.
     vector = emb.embed_texts([query], is_query=True)
-    _, ids = state["index"].search(vector, min(top_k, state["index"].ntotal))
-    return [int(i) for i in ids[0] if i >= 0]
+    store = state["store"]
+    if sources and not store.supports_filter:
+        # Post-filtering is a fallback, not an equivalent: the window is
+        # widened and then narrowed, so anything that ranked below the widened
+        # window is simply gone. Qdrant applies the same filter before scoring.
+        allowed = set(sources)
+        wide = store.search(vector, min(top_k * 20, len(state["chunks"])))
+        return [i for i in wide if state["chunks"][i]["source"] in allowed][:top_k]
+    return store.search(vector, top_k, sources=sources)
 
 
-def bm25_search(query: str, top_k: int) -> list[int]:
+def bm25_search(query: str, top_k: int,
+                sources: list[str] | None = None) -> list[int]:
     state = _load()
     scores = state["bm25"].get_scores(_tokenize(query))
-    ranked = np.argsort(scores)[::-1][:top_k]
-    return [int(i) for i in ranked if scores[i] > 0]
+    ranked = np.argsort(scores)[::-1]
+    if sources:
+        # BM25 scores the whole corpus in one pass anyway, so restricting it is
+        # free and exact — no widened window, nothing lost.
+        allowed = set(sources)
+        ranked = [i for i in ranked if state["chunks"][i]["source"] in allowed]
+    return [int(i) for i in ranked[:top_k] if scores[i] > 0]
 
 
 def reciprocal_rank_fusion(rankings: list[list[int]], k: int = 60) -> list[int]:
@@ -198,16 +228,33 @@ def rerank(query: str, candidates: list[int],
 # --------------------------------------------------------------------------- #
 
 
-def retrieve(query: str, top_k: int = None, top_n: int = None) -> dict:
-    """Run the whole pipeline; returns results plus per-stage counts."""
+def retrieve(query: str, top_k: int = None, top_n: int = None,
+             source: str | None = None) -> dict:
+    """Run the whole pipeline; returns results plus per-stage counts.
+
+    `source` narrows the search to files whose NAME contains that substring,
+    case-insensitively. It is applied before scoring, so it does not merely
+    hide results — it gives the wanted documents the whole top-K to themselves.
+    That is what stops a growing corpus from diluting every query: TOP_K stays
+    10 while the corpus does not.
+    """
     top_k = top_k or settings.retrieval_top_k
     top_n = top_n or settings.rerank_top_n
 
-    semantic = semantic_search(query, top_k)
-    lexical = bm25_search(query, top_k)
+    sources = resolve_sources(source) if source else None
+    if source and not sources:
+        # Silence here would look identical to "the documents say nothing",
+        # which is a different and much more misleading answer.
+        return {"results": [], "confident": True, "filter": source,
+                "matched_files": 0,
+                "stages": {"semantic": 0, "bm25": 0, "fused": 0}}
+
+    semantic = semantic_search(query, top_k, sources)
+    lexical = bm25_search(query, top_k, sources)
     fused = reciprocal_rank_fusion([semantic, lexical])
     if not fused:
         return {"results": [], "confident": True,
+                "filter": source, "matched_files": len(sources or []),
                 "stages": {"semantic": 0, "bm25": 0, "fused": 0}}
 
     if settings.rerank_enabled:
@@ -232,6 +279,7 @@ def retrieve(query: str, top_k: int = None, top_n: int = None) -> dict:
     } for i, score in ranked]
 
     return {"results": results, "confident": confident,
+            "filter": source, "matched_files": len(sources or []),
             "stages": {"semantic": len(semantic), "bm25": len(lexical),
                        "fused": len(fused)}}
 

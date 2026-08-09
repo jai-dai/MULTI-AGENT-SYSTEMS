@@ -68,6 +68,15 @@ class Settings(BaseSettings):
     # checkout otherwise contributes hundreds of READMEs and package docs,
     # which then surface in search as confident noise.
     exclude_dirs: str = ".git,.venv,node_modules,__pycache__,site-packages,dist,build"
+    # Filename patterns never ingested — fnmatch against the NAME, case-insensitive.
+    # Two different jobs share one list. `~$*` are Office lock files, created
+    # while a document is open; they are not documents and hold no text. The
+    # rest is a privacy floor: a folder of real documents contains things that
+    # must not become searchable, and a chunk in the index is one retrieval away
+    # from being pasted into a prompt for a hosted model. Measured on a real
+    # corpus: GitHub recovery codes were indexed and reachable by search.
+    # This is a default, not a boundary — extend it per corpus in .env.
+    exclude_files: str = "~$*,.env,*.key,*.pem,id_rsa*,*recovery*code*"
     # Stop scanning a spreadsheet after this many consecutive empty rows.
     # Excel declares sheets far larger than their contents; see read_xlsx.
     xlsx_blank_run_limit: int = 2000
@@ -85,6 +94,11 @@ class Settings(BaseSettings):
     ocr_max_pages: int = 40
     tesseract_cmd: str = "tesseract"
     index_dir: str = "index"
+    # Which engine holds the vectors: "faiss" | "qdrant" (see vectorstore.py).
+    # Not a RAM decision — 6409 vectors are 25 MB either way, against 1.1 GB for
+    # the reranker. Qdrant buys metadata filtering, incremental writes and
+    # sparse vectors; it runs embedded here, no server and no Docker.
+    vector_backend: str = "faiss"
     chunk_size: int = 500
     chunk_overlap: int = 100
     # How many candidates each retriever contributes before fusion and rerank.

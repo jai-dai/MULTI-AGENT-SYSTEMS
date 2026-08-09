@@ -229,7 +229,8 @@ def read_report(filename: str) -> str:
     return f"Content of {path.name}:\n\n{_truncate(text, settings.max_url_content_length)}"
 
 
-def knowledge_search(query: str, top_n: int = settings.rerank_top_n) -> str:
+def knowledge_search(query: str, top_n: int = settings.rerank_top_n,
+                     source: str | None = None) -> str:
     """Hybrid search over the local knowledge base (see retriever.py)."""
     query = str(query).strip()
     if not query:
@@ -247,8 +248,9 @@ def knowledge_search(query: str, top_n: int = settings.rerank_top_n) -> str:
     except ImportError as exc:
         return f"ERROR: retrieval module unavailable ({exc})."
 
+    source = str(source).strip() if source else None
     try:
-        found = retrieve(query, top_n=top_n)
+        found = retrieve(query, top_n=top_n, source=source)
     except FileNotFoundError as exc:
         return f"ERROR: {exc}"
     except Exception as exc:
@@ -256,7 +258,15 @@ def knowledge_search(query: str, top_n: int = settings.rerank_top_n) -> str:
 
     results = found["results"]
     if not results:
-        return (f"No passages in the knowledge base match '{query}'. "
+        if source and not found.get("matched_files"):
+            # Distinct from "nothing matched the query": no FILE matched the
+            # filter, so the query was never asked. Reporting them the same way
+            # would teach the model that the base has no answer when it does.
+            return (f"ERROR: no file in the knowledge base has '{source}' in its "
+                    "name, so nothing was searched. Drop the source filter or "
+                    "use a different fragment of the filename.")
+        scope = f" in files matching '{source}'" if source else ""
+        return (f"No passages in the knowledge base match '{query}'{scope}. "
                 "Try different wording, or search the web instead.")
 
     stages = found["stages"]
@@ -316,6 +326,19 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                         "minimum": 1,
                         "maximum": 10,
                         "default": settings.rerank_top_n,
+                    },
+                    "source": {
+                        "type": "string",
+                        "description": (
+                            "Optional: restrict the search to files whose NAME "
+                            "contains this fragment, case-insensitive — e.g. "
+                            "'invoice', 'EDCF', 'payroll'. Use it when the "
+                            "question is clearly about one kind of document; "
+                            "it is applied before scoring, so those files get "
+                            "the whole result budget instead of competing with "
+                            "the entire corpus. Omit it when unsure — a filter "
+                            "that matches no file returns nothing at all."
+                        ),
                     },
                 },
                 "required": ["query"],
