@@ -35,6 +35,39 @@ _local_model = None
 _client = None
 
 
+def _batches(texts: list[str]) -> list[list[str]]:
+    """Батчи, ограниченные СУММОЙ СИМВОЛОВ, а не количеством элементов.
+
+    Счётчик штук — неверная мера нагрузки. На документах со средним чанком в
+    486 символов батч из 64 проходил годами; на почте, где чанк это целое
+    письмо (в среднем 1163 символа, максимум 4194), тот же батч из 64 вешал
+    сервер: llama.cpp обрабатывает батч как один длинный промпт, и суммарная
+    длина упиралась в его пределы. Замер: 8 писем — 200 OK, 32 — таймаут.
+
+    Отказ при этом выглядел не как ошибка размера, а как HTTP 400 ровно через
+    пять минут, что читается как «сломался эмбеддер», а не «батч великоват».
+
+    Ограничение по символам подстраивается само: короткие чанки собираются в
+    большие батчи, длинные — в маленькие, и ни один источник данных не требует
+    отдельной настройки.
+    """
+    budget = settings.embed_batch_chars
+    limit = settings.embed_batch_size
+    out: list[list[str]] = []
+    window: list[str] = []
+    size = 0
+    for text in texts:
+        length = len(text)
+        if window and (size + length > budget or len(window) >= limit):
+            out.append(window)
+            window, size = [], 0
+        window.append(text)
+        size += length
+    if window:
+        out.append(window)
+    return out
+
+
 def _openai_client():
     global _client
     if _client is None:
@@ -91,14 +124,14 @@ def embed_texts(texts: list[str], *, is_query: bool = False,
 
     client = _openai_client()
     collected: list[list[float]] = []
-    batch = settings.embed_batch_size
-    for start in range(0, len(prepared), batch):
-        window = prepared[start:start + batch]
+    done = 0
+    for window in _batches(prepared):
         response = client.embeddings.create(
             model=settings.embedding_model, input=window)
         collected.extend(item.embedding for item in response.data)
+        done += len(window)
         if progress:
-            print(f"   embedded {min(start + batch, len(prepared))}/{len(prepared)}")
+            print(f"   embedded {done}/{len(prepared)}")
 
     array = np.asarray(collected, dtype="float32")
     norms = np.linalg.norm(array, axis=1, keepdims=True)
@@ -148,6 +181,17 @@ def signature() -> dict:
 
 
 def describe(sig: dict) -> str:
+    """Человекочитаемо: чем считаем.
+
+    С EMBEDDING_IDENTITY подпись состоит из одного поля, и прежняя версия
+    печатала «? (?)» — то есть молчала ровно в том месте, которое должно
+    отвечать на вопрос «какой моделью». Имя модели в этом случае берётся из
+    текущей конфигурации, а identity показывается как то, чем она себя объявила.
+    """
+    if "identity" in sig:
+        return (f"{settings.embedding_model} "
+                f"({settings.embedding_base_url or settings.embedding_backend}, "
+                f"identity={sig['identity']})")
     where = sig.get("base_url") or sig.get("backend", "?")
     return f"{sig.get('model', '?')} ({where})"
 

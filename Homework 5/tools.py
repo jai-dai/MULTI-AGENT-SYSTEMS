@@ -230,7 +230,8 @@ def read_report(filename: str) -> str:
 
 
 def knowledge_search(query: str, top_n: int = settings.rerank_top_n,
-                     source: str | None = None) -> str:
+                     source: str | None = None,
+                     correspondent: str | None = None) -> str:
     """Hybrid search over the local knowledge base (see retriever.py)."""
     query = str(query).strip()
     if not query:
@@ -249,8 +250,10 @@ def knowledge_search(query: str, top_n: int = settings.rerank_top_n,
         return f"ERROR: retrieval module unavailable ({exc})."
 
     source = str(source).strip() if source else None
+    correspondent = str(correspondent).strip() if correspondent else None
     try:
-        found = retrieve(query, top_n=top_n, source=source)
+        found = retrieve(query, top_n=top_n, source=source,
+                         correspondent=correspondent)
     except FileNotFoundError as exc:
         return f"ERROR: {exc}"
     except Exception as exc:
@@ -326,6 +329,19 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                         "minimum": 1,
                         "maximum": 10,
                         "default": settings.rerank_top_n,
+                    },
+                    "correspondent": {
+                        "type": "string",
+                        "description": (
+                            "Optional: restrict to messages where this fragment "
+                            "appears in the sender, To or Cc — an address or a "
+                            "domain, e.g. 'law-lin', 'aton.ua', 'pashkina'. Use "
+                            "it for questions about WHO a message involves; the "
+                            "`query` still has to say WHAT it is about. A "
+                            "correspondent filter with a vague query returns the "
+                            "right messages with low scores, because the "
+                            "reranker judges topical relevance, not metadata."
+                        ),
                     },
                     "source": {
                         "type": "string",

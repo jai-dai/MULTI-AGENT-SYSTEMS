@@ -2,6 +2,9 @@
 # Run logs: `python -u ingest.py 2>&1 | tee ingest.log` (see README → Ingestion).
 # Useful locally, meaningless in the repository — they describe one machine's run.
 *.log
+# Твоя настоящая почта: SQLite с письмами и сохранённые вложения.
+# Приватные данные конкретной машины — в репозиторий не идут никогда.
+mail/
 __pycache__/
 *.pyc
 output/

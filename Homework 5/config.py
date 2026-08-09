@@ -81,6 +81,32 @@ class Settings(BaseSettings):
     # Excel declares sheets far larger than their contents; see read_xlsx.
     xlsx_blank_run_limit: int = 2000
 
+    # ---- Mail (IMAP → SQLite → mailprep → index) ----
+    imap_host: str = "imap.gmail.com"
+    imap_user: str = ""
+    # An App Password, NOT the account password: Google disabled the latter for
+    # IMAP. It grants mail access only and is revoked separately.
+    imap_password: SecretStr | None = None
+    # A name starting with a backslash is an IMAP special-use ATTRIBUTE, not a
+    # folder name — resolved against the server's own LIST. Gmail translates
+    # folder names into the account's language ("[Gmail]/Отправленные"), so a
+    # literal name only works on an English account; the attribute always does.
+    imap_folders: str = "INBOX,\\Sent"
+    imap_since: str = ""              # YYYY-MM-DD; empty = the whole mailbox
+    mail_db: str = "mail/mail.db"
+    # Вложения поддерживаемых форматов сохраняются сюда и индексируются ОБЫЧНЫМ
+    # конвейером документов: DATA_DIR="data,mail/attachments". В деловой почте
+    # договор приходит файлом, а в теле письма стоит «у вкладенні».
+    mail_attachments_dir: str = "mail/attachments"
+    mail_attachment_max_mb: int = 25
+    # Адреса, чьи письма не попадают в индекс (fnmatch по email отправителя).
+    # Список НАМЕРЕННО короткий. Соблазн отсечь всё «no-reply» велик, но замер
+    # по реальному ящику его не подтвердил: из 16 автоматических отправителей
+    # ценными оказались отчёты Binotel по звонкам компании, поддержка Hetzner и
+    # логистика Seabay. Мусор тут только уведомления Google о самом аккаунте —
+    # они же единственные, что описывают состояние доступа.
+    mail_exclude_senders: str = "*@accounts.google.com"
+
     # ---- OCR (scanned PDFs) ----
     # off | auto | vision | tesseract. "auto" prefers Apple Vision, which is
     # built into macOS, and falls back to tesseract where that exists.
@@ -117,7 +143,11 @@ class Settings(BaseSettings):
     # generation" scores 0.0000), so it must not be the only gate between the
     # agent and its own knowledge base.
     rerank_min_score: float = 0.02
+    # Потолок батча по КОЛИЧЕСТВУ и по СУММЕ СИМВОЛОВ; срабатывает тот, что
+    # раньше. Символьный предел — главный: он не даёт длинным текстам (письмо
+    # целиком) собраться в батч, который локальный сервер эмбеддингов не тянет.
     embed_batch_size: int = 64
+    embed_batch_chars: int = 12000
 
     output_dir: str = "output"
 
@@ -127,6 +157,10 @@ class Settings(BaseSettings):
     model_timeout: int = 300
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    @property
+    def imap_folder_list(self) -> list[str]:
+        return [f.strip() for f in self.imap_folders.split(",") if f.strip()]
 
     @property
     def ingest_dirs(self) -> list[str]:

@@ -166,13 +166,43 @@ def resolve_sources(pattern: str) -> list[str]:
                    if needle in c["source"].lower()})
 
 
+def resolve_correspondent(pattern: str) -> dict[str, list[str]]:
+    """Фрагмент адреса/домена -> точные значения полей участников.
+
+    Метаданные не ищутся сходством векторов: реранкер обучен на «отвечает ли
+    пассаж на вопрос», а не «совпал ли адресат». Замер: «що я відправляв у
+    24print» находит нужное письмо, но получает score 0.028 и confident=False.
+    Поэтому вопрос про участника — это ФИЛЬТР, а не запрос.
+    """
+    needle = pattern.strip().lower()
+    if not needle:
+        return {}
+    chunks = _load()["chunks"]
+    out: dict[str, set] = {"sender_email": set(), "to_emails": set(),
+                           "cc_emails": set()}
+    for chunk in chunks:
+        for field in out:
+            value = chunk.get(field)
+            for address in ([value] if isinstance(value, str) else (value or [])):
+                if address and needle in address.lower():
+                    out[field].add(address)
+    return {field: sorted(values) for field, values in out.items() if values}
+
+
 def semantic_search(query: str, top_k: int,
-                    sources: list[str] | None = None) -> list[int]:
+                    sources: list[str] | None = None,
+                    ids: list[int] | None = None) -> list[int]:
     state = _load()
     # is_query=True: prefix-trained models score their own "query:" side
     # differently from the "passage:" side used at ingest time.
     vector = emb.embed_texts([query], is_query=True)
     store = state["store"]
+    if ids is not None and not store.supports_filter:
+        allowed = set(ids)
+        wide = store.search(vector, min(top_k * 20, len(state["chunks"])))
+        return [i for i in wide if i in allowed][:top_k]
+    if ids is not None:
+        return store.search(vector, top_k, ids=ids)
     if sources and not store.supports_filter:
         # Post-filtering is a fallback, not an equivalent: the window is
         # widened and then narrowed, so anything that ranked below the widened
@@ -180,11 +210,12 @@ def semantic_search(query: str, top_k: int,
         allowed = set(sources)
         wide = store.search(vector, min(top_k * 20, len(state["chunks"])))
         return [i for i in wide if state["chunks"][i]["source"] in allowed][:top_k]
-    return store.search(vector, top_k, sources=sources)
+    return store.search(vector, top_k, where={"source": sources} if sources else None)
 
 
 def bm25_search(query: str, top_k: int,
-                sources: list[str] | None = None) -> list[int]:
+                sources: list[str] | None = None,
+                ids: list[int] | None = None) -> list[int]:
     state = _load()
     scores = state["bm25"].get_scores(_tokenize(query))
     ranked = np.argsort(scores)[::-1]
@@ -193,6 +224,9 @@ def bm25_search(query: str, top_k: int,
         # free and exact — no widened window, nothing lost.
         allowed = set(sources)
         ranked = [i for i in ranked if state["chunks"][i]["source"] in allowed]
+    if ids is not None:
+        allowed_ids = set(ids)
+        ranked = [i for i in ranked if int(i) in allowed_ids]
     return [int(i) for i in ranked[:top_k] if scores[i] > 0]
 
 
@@ -228,8 +262,21 @@ def rerank(query: str, candidates: list[int],
 # --------------------------------------------------------------------------- #
 
 
+def positions_for(pattern: str) -> list[int]:
+    """Номера чанков, где участник переписки совпал с фрагментом адреса."""
+    needle = pattern.strip().lower()
+    out = []
+    for position, chunk in enumerate(_load()["chunks"]):
+        haystack = [chunk.get("sender_email") or ""]
+        haystack += chunk.get("to_emails") or []
+        haystack += chunk.get("cc_emails") or []
+        if any(needle in str(a).lower() for a in haystack):
+            out.append(position)
+    return out
+
+
 def retrieve(query: str, top_k: int = None, top_n: int = None,
-             source: str | None = None) -> dict:
+             source: str | None = None, correspondent: str | None = None) -> dict:
     """Run the whole pipeline; returns results plus per-stage counts.
 
     `source` narrows the search to files whose NAME contains that substring,
@@ -241,6 +288,12 @@ def retrieve(query: str, top_k: int = None, top_n: int = None,
     top_k = top_k or settings.retrieval_top_k
     top_n = top_n or settings.rerank_top_n
 
+    ids = positions_for(correspondent) if correspondent else None
+    if correspondent and not ids:
+        return {"results": [], "confident": True, "filter": correspondent,
+                "matched_files": 0,
+                "stages": {"semantic": 0, "bm25": 0, "fused": 0}}
+
     sources = resolve_sources(source) if source else None
     if source and not sources:
         # Silence here would look identical to "the documents say nothing",
@@ -249,8 +302,8 @@ def retrieve(query: str, top_k: int = None, top_n: int = None,
                 "matched_files": 0,
                 "stages": {"semantic": 0, "bm25": 0, "fused": 0}}
 
-    semantic = semantic_search(query, top_k, sources)
-    lexical = bm25_search(query, top_k, sources)
+    semantic = semantic_search(query, top_k, sources, ids)
+    lexical = bm25_search(query, top_k, sources, ids)
     fused = reciprocal_rank_fusion([semantic, lexical])
     if not fused:
         return {"results": [], "confident": True,

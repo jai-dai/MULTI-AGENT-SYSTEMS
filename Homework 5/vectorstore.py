@@ -95,8 +95,10 @@ class FaissStore:
         return self._index.ntotal
 
     def search(self, vector: np.ndarray, top_k: int,
-               sources: list[str] | None = None) -> list[int]:
-        _, ids = self._index.search(vector, min(top_k, self._index.ntotal))
+               where: dict[str, list] | None = None,
+               ids: list[int] | None = None) -> list[int]:
+        _, ids_out = self._index.search(vector, min(top_k, self._index.ntotal))
+        ids = ids_out
         return [int(i) for i in ids[0] if i >= 0]
 
     def all_vectors(self) -> np.ndarray | None:
@@ -116,10 +118,13 @@ class QdrantStore:
     dirname = "qdrant"
     supports_filter = True
 
-    # Payload kept per point. Not used for scoring — it is what a metadata
-    # filter will match on, and it lets a point identify itself without the
-    # chunk list beside it.
-    PAYLOAD_KEYS = ("source", "path", "page", "ocr")
+    # Everything a chunk carries EXCEPT its text and id becomes payload. Listing
+    # the keys instead would mean editing this file every time a new source
+    # brings its own metadata — mail arrived with sender, domain, date and
+    # language, and none of them are the store's business to know about.
+    # The text is excluded because it already lives in chunks.json and would
+    # otherwise double the storage for nothing.
+    PAYLOAD_SKIP = ("text", "id")
 
     def __init__(self) -> None:
         from qdrant_client import QdrantClient, models
@@ -178,8 +183,8 @@ class QdrantStore:
                 models.PointStruct(
                     id=i,                       # position == id, see module docstring
                     vector=vectors[i].tolist(),
-                    payload={k: chunks[i][k] for k in self.PAYLOAD_KEYS
-                             if k in chunks[i]},
+                    payload={k: v for k, v in chunks[i].items()
+                             if k not in self.PAYLOAD_SKIP},
                 ) for i in window
             ])
 
@@ -188,21 +193,32 @@ class QdrantStore:
         return client.count(COLLECTION, exact=True).count
 
     def search(self, vector: np.ndarray, top_k: int,
-               sources: list[str] | None = None) -> list[int]:
-        """`sources` is a set of EXACT filenames, matched before scoring.
+               where: dict[str, list] | None = None,
+               ids: list[int] | None = None) -> list[int]:
+        """`ids` — прямое ограничение по номерам точек; `where` — поле payload -> список ТОЧНЫХ значений, до скоринга.
 
-        Exact values on purpose: MatchValue needs no payload index and behaves
-        the same in local mode as on a server. A substring like "invoice" is
-        resolved to the filenames it matches by the caller, which already holds
-        the chunk list — so the store never has to implement text search.
+        Точные значения намеренно: MatchAny не требует текстового индекса и
+        одинаково работает в локальном режиме и на сервере. Подстроку («invoice»,
+        «24print») разворачивает в список значений вызывающая сторона — у неё
+        уже есть список чанков, так что хранилищу не нужен текстовый поиск.
+
+        Поле произвольное: у документов это `source`, у почты — `to_emails`
+        или `sender_email`. Списочные поля Qdrant сопоставляет поэлементно, так
+        что MatchAny по `to_emails` находит письмо, где адресат один из многих.
         """
         client = self._connect()
-        query_filter = None
-        if sources:
-            query_filter = self._models.Filter(must=[
-                self._models.FieldCondition(
-                    key="source", match=self._models.MatchAny(any=list(sources)))
-            ])
+        must = []
+        if where:
+            must += [self._models.FieldCondition(
+                key=field, match=self._models.MatchAny(any=list(values)))
+                for field, values in where.items() if values]
+        if ids is not None:
+            # Участник переписки может совпасть в sender, to ИЛИ cc — это ИЛИ,
+            # а условия в `must` соединяются через И. Разворачивать в вложенный
+            # should можно, но список номеров точнее и работает одинаково на
+            # обоих бэкендах: подходящие чанки уже вычислены вызывающей стороной.
+            must.append(self._models.HasIdCondition(has_id=list(ids)))
+        query_filter = self._models.Filter(must=must) if must else None
         hits = client.query_points(COLLECTION, query=vector[0].tolist(),
                                    limit=top_k, query_filter=query_filter,
                                    with_payload=False).points
