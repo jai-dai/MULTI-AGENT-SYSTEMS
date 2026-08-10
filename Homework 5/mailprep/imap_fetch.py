@@ -131,6 +131,17 @@ def _safe_name(raw: str) -> str:
     return name[:150] or "attachment"
 
 
+def attachment_folder(message_id: str) -> str:
+    """Message-ID -> имя каталога, в котором лежат его вложения.
+
+    Единственное место, где это имя вычисляется. Оно связывает файл на диске с
+    письмом в базе, а такая связь ломается тихо: разойдись формула на один
+    символ между тем, кто пишет, и тем, кто читает, — вложения просто перестанут
+    находить своё письмо, без единой ошибки.
+    """
+    return re.sub(r"[^\w.\-]", "_", message_id)[:80]
+
+
 def parse(raw_bytes: bytes, thread_id: str = "", labels: list[str] | None = None,
           attachments_dir: Path | None = None, max_bytes: int = 0
           ) -> RawMessage | None:
@@ -170,8 +181,7 @@ def parse(raw_bytes: bytes, thread_id: str = "", labels: list[str] | None = None
                         and data and (not max_bytes or len(data) <= max_bytes)):
                     # Каталог на письмо: имена файлов повторяются («Договір.pdf»
                     # приходит десятками), а перезапись потеряла бы документы.
-                    folder = attachments_dir / re.sub(r"[^\w.\-]", "_",
-                                                      message_id)[:80]
+                    folder = attachments_dir / attachment_folder(message_id)
                     folder.mkdir(parents=True, exist_ok=True)
                     target = folder / clean_name
                     target.write_bytes(data)

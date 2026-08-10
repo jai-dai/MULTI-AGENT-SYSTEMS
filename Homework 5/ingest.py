@@ -410,8 +410,42 @@ def stitch(chunks: list[str], overlap: int) -> list[str]:
     return out
 
 
+_mail_metadata: dict[str, dict] | None = None
+
+
+def mail_metadata(path: Path) -> dict:
+    """Метаданные письма для файла, если он пришёл вложением.
+
+    Вложение — обычный документ по содержимому и почтовый объект по
+    происхождению. Без второй половины его нельзя найти вопросом «что мне
+    присылал X»: фильтр участников смотрит на поля письма, а у PDF их нет.
+    Справочник строится один раз за прогон и только если такие файлы вообще
+    встретились — корпус документов не обязан знать о существовании почты.
+    """
+    global _mail_metadata
+
+    attachments_root = (Path(__file__).parent / settings.mail_attachments_dir).resolve()
+    try:
+        relative = path.resolve().relative_to(attachments_root)
+    except ValueError:
+        return {}
+
+    if _mail_metadata is None:
+        try:
+            from mailprep.attachments import metadata_by_folder
+            _mail_metadata = metadata_by_folder(
+                Path(__file__).parent / settings.mail_db)
+        except Exception as exc:            # почта не должна ронять индексацию
+            print(f"   ! mail metadata unavailable: {type(exc).__name__}: {exc}")
+            _mail_metadata = {}
+
+    # Первый сегмент пути внутри mail/attachments — каталог письма.
+    return _mail_metadata.get(relative.parts[0], {}) if relative.parts else {}
+
+
 def chunk_document(path: Path, digest: str) -> list[dict]:
     chunks = []
+    metadata = mail_metadata(path)
     for text, page in read_document(path):
         pieces = split_text(text, settings.chunk_size, settings.chunk_overlap)
         for position, body in enumerate(pieces):
@@ -422,6 +456,7 @@ def chunk_document(path: Path, digest: str) -> list[dict]:
                 "source": path.name,
                 "path": str(path),
                 "page": page,
+                **metadata,
             }
             if (str(path), page) in ocr_pages:
                 chunk["ocr"] = True
@@ -632,6 +667,48 @@ def ingest(dirs: list[str] | None = None, rebuild: bool = False) -> dict:
             "embedded": len(fresh)}
 
 
+def relabel() -> dict:
+    """Attach mail metadata to attachment chunks already in the index.
+
+    Metadata is not part of the vector. The text of a contract does not change
+    because we now also know who sent it, so re-embedding 938 chunks to add a
+    sender field would buy nothing and cost ~26 minutes on this machine. The
+    chunks keep their ids and their order; only the payload grows.
+
+    This exists because ingestion is incremental by file digest: the files are
+    unchanged, so an ordinary run would correctly skip every one of them and the
+    new fields would never appear.
+    """
+    directory = index_dir()
+    chunks, vectors = load_chunks(), load_vectors()
+    if not chunks or vectors is None:
+        print(f"no index in {directory} — nothing to relabel.")
+        return {"chunks": 0, "labelled": 0}
+    if len(chunks) != len(vectors):
+        print("   ! index and chunk list disagree — run --rebuild instead.")
+        raise SystemExit(2)
+
+    raw = json.loads((directory / MANIFEST_FILE).read_text(encoding="utf-8"))
+    labelled, senders = 0, set()
+    for chunk in chunks:
+        metadata = mail_metadata(Path(chunk["path"]))
+        if metadata:
+            chunk.update(metadata)
+            labelled += 1
+            senders.add(metadata["sender_email"])
+
+    if not labelled:
+        print(f"no attachment chunks in {directory} — nothing to relabel.")
+        return {"chunks": len(chunks), "labelled": 0}
+
+    save_state(chunks, raw.get("files", {}),
+               np.asarray(vectors, dtype="float32"), raw.get("no_text", []))
+    print(f"relabelled {directory}")
+    print(f"  chunks with mail metadata: {labelled} of {len(chunks)}")
+    print(f"  distinct senders: {len(senders)}")
+    return {"chunks": len(chunks), "labelled": labelled}
+
+
 def clean() -> dict:
     """Apply the current EXCLUDE_FILES and de-duplication policy in place.
 
@@ -703,6 +780,10 @@ def main() -> None:
     parser.add_argument("--clean", action="store_true",
                         help="apply EXCLUDE_FILES and de-duplication to the "
                              "existing index without re-embedding anything")
+    parser.add_argument("--relabel", action="store_true",
+                        help="attach mail metadata (sender, recipients, date) "
+                             "to attachment chunks already indexed, without "
+                             "re-embedding anything")
     args = parser.parse_args()
     dirs = [d.strip() for d in args.dirs.split(",")] if args.dirs else None
     try:
@@ -713,6 +794,8 @@ def main() -> None:
             print(f"set VECTOR_BACKEND={target} in .env to use it")
         elif args.clean:
             clean()
+        elif args.relabel:
+            relabel()
         else:
             ingest(dirs, rebuild=args.rebuild)
     except KeyboardInterrupt:
