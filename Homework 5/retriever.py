@@ -22,7 +22,6 @@ being dropped: a silent empty result is worse than a hedged one.
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 
 # IMPORT ORDER IS LOAD-BEARING on macOS. faiss and torch each ship their own
@@ -33,27 +32,21 @@ from pathlib import Path
 # model itself is still loaded lazily, on first use.
 import torch  # noqa: F401  # isort: skip  (must precede faiss)
 import embeddings as emb  # isort: skip
+import sparse  # isort: skip
 import vectorstore  # isort: skip
 import numpy as np
 
 from config import settings
 
-# `\w` with re.UNICODE, not `[a-z0-9]`. The ASCII class silently emptied BM25 on
-# this corpus: "Статут ТОВ АТОН-ГРУП нова редакція 2020" tokenised to ['2020'],
-# so both the documents and the query became almost empty bags and stage 2
-# returned nothing — measured, 0 of 10 candidates. Nothing raised: the stage ran,
-# scored an empty query against empty documents, and hybrid search quietly
-# degraded to semantic-only on every non-Latin query. A corpus is not English
-# because the code is.
-_TOKEN = re.compile(r"\w+", re.UNICODE)
+# Токенизатор ОДИН на проект и живёт в sparse.py. Разошедшиеся токенизаторы —
+# не гипотетическая опасность: ASCII-класс `[a-z0-9]+` уже оставлял от «Статут
+# ТОВ АТОН-ГРУП нова редакція 2020» единственный токен `2020` и выключал стадию
+# BM25 целиком, молча. История в README.
+_tokenize = sparse.tokenize
 
 # Loaded once per process: the index and the reranker are expensive to build
 # and the agent calls knowledge_search many times per session.
 _state: dict = {}
-
-
-def _tokenize(text: str) -> list[str]:
-    return _TOKEN.findall(text.lower())
 
 
 def _index_dir() -> Path:
@@ -72,8 +65,6 @@ def _load() -> dict:
             f"no {store.name} knowledge index in {directory} — run "
             "`python ingest.py` first")
 
-    from rank_bm25 import BM25Okapi
-
     chunks = json.loads(chunks_path.read_text(encoding="utf-8"))
     total = store.open()
     if total != len(chunks):
@@ -89,10 +80,22 @@ def _load() -> dict:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         emb.check_compatible(manifest.get("embedding"))
 
+    # Словарь на диске означает, что BM25 уже посчитан и лежит в хранилище
+    # разреженными векторами; тогда rank_bm25 не строится вовсе и не занимает
+    # замеренные 49 МБ. Выигрыш не в скорости старта — она 0.39s и роли не играет,
+    # — а в том, что фильтр по payload у разреженного вектора применяется до
+    # скоринга, как у плотного. Подробности в sparse.py.
+    vocabulary = sparse.load(directory)
+    bm25 = None
+    if vocabulary is None:
+        from rank_bm25 import BM25Okapi
+        bm25 = BM25Okapi([_tokenize(c["text"]) for c in chunks])
+
     _state.update({
         "chunks": chunks,
         "store": store,
-        "bm25": BM25Okapi([_tokenize(c["text"]) for c in chunks]),
+        "vocabulary": vocabulary,
+        "bm25": bm25,
         "reranker": None,
     })
     return _state
@@ -223,7 +226,19 @@ def semantic_search(query: str, top_k: int,
 def bm25_search(query: str, top_k: int,
                 sources: list[str] | None = None,
                 ids: list[int] | None = None) -> list[int]:
+    """Лексическая стадия. Считает её либо хранилище, либо rank_bm25 в памяти.
+
+    Разница не только в том, где живёт индекс. У разреженных векторов в Qdrant
+    фильтр по файлу или участнику переписки применяется ДО скоринга, как у
+    плотных; rank_bm25 ничего не знает ни о payload, ни о фильтрах, поэтому
+    ниже приходится ранжировать весь корпус и отбрасывать лишнее после.
+    """
     state = _load()
+    if state["vocabulary"] is not None:
+        return state["store"].search_sparse(
+            sparse.query_vector(query, state["vocabulary"]), top_k,
+            where={"source": sources} if sources else None, ids=ids)
+
     scores = state["bm25"].get_scores(_tokenize(query))
     ranked = np.argsort(scores)[::-1]
     if sources:

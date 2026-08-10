@@ -45,6 +45,7 @@ import numpy as np
 from pypdf import PdfReader
 
 import ocr
+import sparse
 import vectorstore
 from config import settings
 
@@ -582,7 +583,16 @@ def save_state(chunks: list[dict], files: dict, vectors: np.ndarray,
         # OCR pass has to target.
         "no_text": sorted(barren or []),
     }
-    vectorstore.get_store().write(vectors, chunks)
+    # BM25 считается здесь, а не при каждом старте процесса: веса зависят только
+    # от корпуса, а корпус в этот момент как раз собран целиком. Словарь ложится
+    # рядом с индексом — без него номера измерений в запросе указывали бы не на
+    # те термины, что писались в документы.
+    store = vectorstore.get_store()
+    terms = None
+    if store.name == "qdrant":
+        vocabulary, terms = sparse.build(chunks)
+        sparse.save(directory, vocabulary)
+    store.write(vectors, chunks, terms)
     (directory / CHUNKS_FILE).write_text(
         json.dumps(chunks, ensure_ascii=False), encoding="utf-8")
     (directory / MANIFEST_FILE).write_text(

@@ -85,7 +85,12 @@ class FaissStore:
     def exists(self) -> bool:
         return self.path.exists()
 
-    def write(self, vectors: np.ndarray, chunks: list[dict]) -> None:
+    # FAISS хранит только плотные векторы, поэтому лексический поиск при этом
+    # бэкенде остаётся за rank_bm25 в памяти процесса. Аргумент принимается и
+    # игнорируется молча — так вызывающей стороне не нужно знать, какой движок
+    # под ней, а retriever выбирает стадию по наличию словаря на диске.
+    def write(self, vectors: np.ndarray, chunks: list[dict],
+              sparse: list[dict[int, float]] | None = None) -> None:
         index = self._faiss.IndexFlatIP(vectors.shape[1])
         index.add(vectors)
         self._faiss.write_index(index, str(self.path))
@@ -125,6 +130,8 @@ class QdrantStore:
     # The text is excluded because it already lives in chunks.json and would
     # otherwise double the storage for nothing.
     PAYLOAD_SKIP = ("text", "id")
+    # Имя разреженного вектора внутри точки. Плотный остаётся безымянным.
+    SPARSE_NAME = "bm25"
 
     def __init__(self) -> None:
         from qdrant_client import QdrantClient, models
@@ -160,7 +167,8 @@ class QdrantStore:
             self._client.close()
             self._client = None
 
-    def write(self, vectors: np.ndarray, chunks: list[dict]) -> None:
+    def write(self, vectors: np.ndarray, chunks: list[dict],
+              sparse: list[dict[int, float]] | None = None) -> None:
         models = self._models
         # A write replaces the collection outright, matching how save_state()
         # behaves today. Incremental upsert is the next step, not this one.
@@ -175,6 +183,13 @@ class QdrantStore:
             # stays correct even if that ever stops being true.
             vectors_config=models.VectorParams(size=int(vectors.shape[1]),
                                                distance=models.Distance.COSINE),
+            # Разреженный вектор живёт рядом с плотным в той же точке, поэтому
+            # фильтр по payload и ограничение по id одинаково действуют на обе
+            # стадии поиска. Ради этого он тут и нужен: в rank_bm25 фильтровать
+            # нечем, он ничего не знает ни о payload, ни о Qdrant.
+            sparse_vectors_config=(
+                {self.SPARSE_NAME: models.SparseVectorParams()}
+                if sparse is not None else None),
         )
         batch = 512
         for start in range(0, len(chunks), batch):
@@ -182,11 +197,29 @@ class QdrantStore:
             client.upsert(COLLECTION, points=[
                 models.PointStruct(
                     id=i,                       # position == id, see module docstring
-                    vector=vectors[i].tolist(),
+                    vector=self._vector_of(vectors[i], sparse, i),
                     payload={k: v for k, v in chunks[i].items()
                              if k not in self.PAYLOAD_SKIP},
                 ) for i in window
             ])
+
+    def _vector_of(self, dense: np.ndarray,
+                   sparse: list[dict[int, float]] | None, i: int):
+        """Плотный вектор, а рядом разреженный — если он есть.
+
+        Пустая строка — это имя безымянного вектора по умолчанию: коллекция
+        создавалась с одним плотным вектором без имени, и оно остаётся таким же
+        после добавления именованного разреженного. Так старые индексы читаются
+        тем же кодом, что и новые.
+        """
+        if sparse is None:
+            return dense.tolist()
+        terms = sparse[i]
+        return {
+            "": dense.tolist(),
+            self.SPARSE_NAME: self._models.SparseVector(
+                indices=list(terms), values=list(terms.values())),
+        }
 
     def open(self) -> int:
         client = self._connect()
@@ -224,6 +257,39 @@ class QdrantStore:
                                    with_payload=False).points
         return [int(h.id) for h in hits]
 
+    def has_sparse(self) -> bool:
+        client = self._connect()
+        config = client.get_collection(COLLECTION).config.params
+        return bool(getattr(config, "sparse_vectors", None))
+
+    def search_sparse(self, terms: dict[int, float], top_k: int,
+                      where: dict[str, list] | None = None,
+                      ids: list[int] | None = None) -> list[int]:
+        """Лексический поиск по BM25-вектору — те же фильтры, что и у плотного.
+
+        Пустой запрос отдаётся как пустой результат, а не как поиск по всей
+        базе: если ни один термин не попал в словарь, честный ответ — «ничего»,
+        а не произвольные top_k точек.
+        """
+        if not terms:
+            return []
+        client = self._connect()
+        must = []
+        if where:
+            must += [self._models.FieldCondition(
+                key=field, match=self._models.MatchAny(any=list(values)))
+                for field, values in where.items() if values]
+        if ids is not None:
+            must.append(self._models.HasIdCondition(has_id=list(ids)))
+        query_filter = self._models.Filter(must=must) if must else None
+        hits = client.query_points(
+            COLLECTION,
+            query=self._models.SparseVector(indices=list(terms),
+                                            values=list(terms.values())),
+            using=self.SPARSE_NAME, limit=top_k,
+            query_filter=query_filter, with_payload=False).points
+        return [int(h.id) for h in hits]
+
     def all_vectors(self) -> np.ndarray | None:
         client = self._connect()
         total = client.count(COLLECTION, exact=True).count
@@ -235,7 +301,12 @@ class QdrantStore:
             points, offset = client.scroll(COLLECTION, limit=1024, offset=offset,
                                            with_vectors=True, with_payload=False)
             for point in points:
-                out[int(point.id)] = point.vector
+                # С разреженным вектором рядом точка отдаёт словарь векторов, а
+                # плотный лежит под пустым именем — тем самым, под которым он
+                # писался. Без разреженного это по-прежнему просто список.
+                vector = point.vector
+                out[int(point.id)] = (vector[""] if isinstance(vector, dict)
+                                      else vector)
             if offset is None:
                 break
         return np.stack([out[i] for i in sorted(out)]).astype("float32")
