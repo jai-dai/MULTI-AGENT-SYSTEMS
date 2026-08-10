@@ -38,7 +38,14 @@ import numpy as np
 
 from config import settings
 
-_TOKEN = re.compile(r"[a-z0-9]+")
+# `\w` with re.UNICODE, not `[a-z0-9]`. The ASCII class silently emptied BM25 on
+# this corpus: "Статут ТОВ АТОН-ГРУП нова редакція 2020" tokenised to ['2020'],
+# so both the documents and the query became almost empty bags and stage 2
+# returned nothing — measured, 0 of 10 candidates. Nothing raised: the stage ran,
+# scored an empty query against empty documents, and hybrid search quietly
+# degraded to semantic-only on every non-Latin query. A corpus is not English
+# because the code is.
+_TOKEN = re.compile(r"\w+", re.UNICODE)
 
 # Loaded once per process: the index and the reranker are expensive to build
 # and the agent calls knowledge_search many times per session.
