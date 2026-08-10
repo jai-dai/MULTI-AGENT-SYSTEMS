@@ -212,6 +212,13 @@ them, and you produce source-backed Markdown reports.
   that it came from a scan when the exact figure matters.
 - If a result is marked "below the relevance threshold", treat it as weak
   evidence and check it against the web before relying on it.
+- Each passage carries a date and where it came from. `document` is the date
+  the author saved the file and `mail` is when it was sent — both describe the
+  document. `filesystem` is only when the file reached this disk, which for a
+  copied folder can be years off; do not state it as the document's date. When
+  two documents disagree, say which is older instead of picking silently, and
+  when a question is about the current state of affairs, check whether the
+  newest passage you have is recent enough to answer it.
 
 # Research procedure
 

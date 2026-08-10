@@ -23,7 +23,7 @@ from .imap_fetch import attachment_folder
 # что кладёт в почтовые чанки mailprep/index.py: retriever фильтрует оба индекса
 # одним и тем же кодом, и расхождение имён означало бы фильтр, который молча
 # работает на одном индексе и не работает на другом.
-FIELDS = ("message_id", "thread_id", "subject", "date",
+FIELDS = ("message_id", "thread_id", "subject", "mail_date",
           "sender_email", "sender_name", "to_emails", "cc_emails")
 
 
@@ -53,7 +53,11 @@ def metadata_by_folder(db_path: str | Path) -> dict[str, dict]:
         "message_id": row["rfc_message_id"],
         "thread_id": row["thread_id"],
         "subject": row["subject"] or "",
-        "date": row["date"] or "",
+        # ИМЕННО mail_date, а не date. Замер на живом индексе: устав 2020 года
+        # выводился как «2026-06-16», потому что письмо с ним переслали в этом
+        # году. Это две разные даты — «когда документ создан» и «когда его
+        # прислали», — и вторая не имеет права занимать место первой.
+        "mail_date": (row["date"] or "")[:10],
         "sender_email": row["sender_email"] or "",
         "sender_name": row["sender_name"] or "",
         "to_emails": _emails(row["to_json"]),

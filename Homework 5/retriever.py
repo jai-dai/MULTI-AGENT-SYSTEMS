@@ -333,6 +333,14 @@ def retrieve(query: str, top_k: int = None, top_n: int = None,
         "score": round(score, 4),
         "in_semantic": i in semantic,
         "in_bm25": i in lexical,
+        # Without a date the model cannot tell a charter from 2020 apart from
+        # this year's, and quotes the stale one with the same confidence.
+        "date": chunks[i].get("date", ""),
+        "date_source": chunks[i].get("date_source", ""),
+        # Дата письма показывается отдельно и только когда отличается от даты
+        # документа: «договір 2020 року, надіслали в червні 2026» — это две
+        # разные величины, и склеивать их в одну значит терять одну из них.
+        "mail_date": chunks[i].get("mail_date", ""),
         # Recognised from an image, so the wording may carry OCR errors —
         # the reader has to know that before quoting it verbatim.
         "ocr": bool(chunks[i].get("ocr")),

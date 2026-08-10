@@ -286,9 +286,17 @@ def knowledge_search(query: str, top_n: int = settings.rerank_top_n,
         origin = "+".join(name for name, on in
                           (("semantic", r["in_semantic"]), ("bm25", r["in_bm25"])) if on)
         marker = " OCR" if r.get("ocr") else ""
+        # The date carries where it came from, because the two are not equally
+        # trustworthy: "document" is what the author saved, "mail" is when it
+        # was sent, "filesystem" is only when the file reached this disk — which
+        # for a copied folder says nothing about the document at all.
+        dated = (f" {r['date']} ({r['date_source']})"
+                 if r.get("date") else "")
+        if r.get("mail_date") and r["mail_date"] != r.get("date"):
+            dated += f", sent {r['mail_date']}"
         blocks.append(
-            f"\n{i}. [{r['source']} p.{r['page']}]{marker} score={r['score']} "
-            f"via {origin}\n"
+            f"\n{i}. [{r['source']} p.{r['page']}]{dated}{marker} "
+            f"score={r['score']} via {origin}\n"
             f"{_truncate(r['text'], settings.max_url_content_length)}")
     return header + "\n" + "\n".join(blocks)
 

@@ -34,6 +34,8 @@ import hashlib
 import json
 import os
 import sys
+from collections import Counter
+from datetime import datetime
 from pathlib import Path
 
 # `embeddings` first: with the local backend it initialises torch, which must
@@ -410,6 +412,46 @@ def stitch(chunks: list[str], overlap: int) -> list[str]:
     return out
 
 
+def document_metadata(path: Path) -> dict:
+    """Дата документа и — обязательно — её происхождение.
+
+    Дат две, и они отвечают на разные вопросы. `created` внутри самого файла —
+    когда документ создал автор; mtime — когда файл лёг на этот диск. Замер по
+    корпусу: внутренняя дата есть у 239 из 287 PDF и DOCX (83%), у остальных
+    остаётся только mtime.
+
+    Поэтому пишется не только дата, но и `date_source`. Без него через месяц
+    никто не отличит настоящую дату подписания договора от даты, когда папку
+    скопировали с другого ноутбука, — а выглядеть они будут одинаково
+    убедительно.
+    """
+    created = None
+    try:
+        if path.suffix.lower() in PDF_SUFFIXES:
+            info = PdfReader(str(path)).metadata
+            created = info.creation_date if info else None
+        elif path.suffix.lower() in DOCX_SUFFIXES | XLSX_SUFFIXES | PPTX_SUFFIXES:
+            # docx, xlsx и pptx — это OOXML, то есть zip с одинаковым
+            # docProps/core.xml. Читать его напрямую дешевле, чем поднимать три
+            # разные библиотеки ради одного поля.
+            import re
+            import zipfile
+            with zipfile.ZipFile(path) as archive:
+                core = archive.read("docProps/core.xml").decode("utf-8", "replace")
+            found = re.search(r"<dcterms:created[^>]*>([^<]+)<", core)
+            created = datetime.fromisoformat(
+                found.group(1).replace("Z", "+00:00")) if found else None
+    except Exception:
+        # Битый или нестандартный контейнер — не повод терять файл: ниже есть
+        # mtime, который есть всегда.
+        created = None
+
+    if created:
+        return {"date": created.date().isoformat(), "date_source": "document"}
+    stamp = datetime.fromtimestamp(path.stat().st_mtime)
+    return {"date": stamp.date().isoformat(), "date_source": "filesystem"}
+
+
 _mail_metadata: dict[str, dict] | None = None
 
 
@@ -443,9 +485,26 @@ def mail_metadata(path: Path) -> dict:
     return _mail_metadata.get(relative.parts[0], {}) if relative.parts else {}
 
 
+def chunk_metadata(path: Path) -> dict:
+    """Всё, что известно о файле помимо его текста.
+
+    Приоритет дат: собственная дата документа, затем дата письма, и только
+    потом mtime. Порядок выведен из промаха, а не из вкуса: сначала дата письма
+    стояла первой, и устав 2020 года выводился как «2026-06-16», потому что
+    письмо с ним переслали в этом году. Зато когда своей даты у файла нет,
+    дата письма всё равно лучше mtime — mtime у вложения это момент, когда его
+    скачал `imap_fetch`, то есть чистый артефакт нашего же конвейера.
+    """
+    metadata = {**document_metadata(path), **mail_metadata(path)}
+    if metadata.get("mail_date") and metadata["date_source"] == "filesystem":
+        metadata["date"] = metadata["mail_date"]
+        metadata["date_source"] = "mail"
+    return metadata
+
+
 def chunk_document(path: Path, digest: str) -> list[dict]:
     chunks = []
-    metadata = mail_metadata(path)
+    metadata = chunk_metadata(path)
     for text, page in read_document(path):
         pieces = split_text(text, settings.chunk_size, settings.chunk_overlap)
         for position, body in enumerate(pieces):
@@ -668,16 +727,21 @@ def ingest(dirs: list[str] | None = None, rebuild: bool = False) -> dict:
 
 
 def relabel() -> dict:
-    """Attach mail metadata to attachment chunks already in the index.
+    """Re-derive chunk metadata in place, for every chunk already indexed.
 
-    Metadata is not part of the vector. The text of a contract does not change
-    because we now also know who sent it, so re-embedding 938 chunks to add a
-    sender field would buy nothing and cost ~26 minutes on this machine. The
-    chunks keep their ids and their order; only the payload grows.
+    Metadata is not part of the vector. A contract's text does not change
+    because we now also know its date or who sent it, so re-embedding 7347
+    chunks to add a field would buy nothing and cost hours on this machine. The
+    chunks keep their ids, their order and their vectors; only the payload
+    grows.
 
     This exists because ingestion is incremental by file digest: the files are
-    unchanged, so an ordinary run would correctly skip every one of them and the
-    new fields would never appear.
+    unchanged, so an ordinary run correctly skips all of them and any newly
+    added field would never appear on what is already indexed.
+
+    Files that have since been deleted keep whatever metadata they had — the
+    chunk stays in the index either way, and inventing a date for a file nobody
+    can read is worse than leaving the old one.
     """
     directory = index_dir()
     chunks, vectors = load_chunks(), load_vectors()
@@ -689,23 +753,35 @@ def relabel() -> dict:
         raise SystemExit(2)
 
     raw = json.loads((directory / MANIFEST_FILE).read_text(encoding="utf-8"))
-    labelled, senders = 0, set()
+    # Метаданные читаются по файлу, а чанков у файла десятки: кэш превращает
+    # 7347 чтений с диска в 430.
+    by_path: dict[str, dict] = {}
+    labelled = mailed = missing = 0
+    sources = Counter()
     for chunk in chunks:
-        metadata = mail_metadata(Path(chunk["path"]))
+        path = Path(chunk["path"])
+        if chunk["path"] not in by_path:
+            if path.exists():
+                by_path[chunk["path"]] = chunk_metadata(path)
+            else:
+                by_path[chunk["path"]] = {}
+                missing += 1
+        metadata = by_path[chunk["path"]]
         if metadata:
             chunk.update(metadata)
             labelled += 1
-            senders.add(metadata["sender_email"])
-
-    if not labelled:
-        print(f"no attachment chunks in {directory} — nothing to relabel.")
-        return {"chunks": len(chunks), "labelled": 0}
+            sources[metadata["date_source"]] += 1
+            mailed += bool(metadata.get("sender_email"))
 
     save_state(chunks, raw.get("files", {}),
                np.asarray(vectors, dtype="float32"), raw.get("no_text", []))
     print(f"relabelled {directory}")
-    print(f"  chunks with mail metadata: {labelled} of {len(chunks)}")
-    print(f"  distinct senders: {len(senders)}")
+    print(f"  chunks: {labelled} of {len(chunks)} | files read: {len(by_path)}")
+    print("  date source: " + ", ".join(f"{name} {count}"
+                                        for name, count in sources.most_common()))
+    print(f"  chunks with mail metadata: {mailed}")
+    if missing:
+        print(f"  ! {missing} file(s) no longer on disk — metadata left as it was")
     return {"chunks": len(chunks), "labelled": labelled}
 
 
