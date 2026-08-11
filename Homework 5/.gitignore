@@ -17,3 +17,5 @@ index*/
 # В репозиторий уезжают только *.example — см. weights.example.yaml.
 weights.yaml
 eval_queries.json
+.private-names.txt
+output/
