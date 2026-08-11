@@ -225,6 +225,8 @@ def list_messages(conn: sqlite3.Connection, since: str | None = None,
         attachments = [a.get("filename", "") for a in json.loads(row["attachments"] or "[]")]
         out.append({
             "date": row["date"],
+            "thread_id": row["thread_id"],
+            "message_id": row["rfc_message_id"],
             "sender_email": row["sender_email"],
             "sender_name": row["sender_name"],
             "subject": row["subject"] or "(без темы)",
@@ -236,6 +238,34 @@ def list_messages(conn: sqlite3.Connection, since: str | None = None,
         if len(out) >= limit:
             break
     return out
+
+
+def collapse_threads(messages: list[dict]) -> list[dict]:
+    """Одна строка на цепочку: самое свежее письмо плюс общий счёт.
+
+    Не косметика. Первый же прогон ранжирования показал восемь писем «Re:
+    Incorporation of Y*****h Korea» подряд в топе — это одно дело, а не восемь
+    дел, и они вытеснили из обзора всё остальное. Дайджест отвечает на вопрос
+    «чем заняться», а там единица внимания — переписка, а не сообщение.
+
+    Вложения собираются по всей цепочке: документ мог прийти любым письмом в
+    ней, а искать его потом придётся по имени.
+    """
+    threads: dict[str, dict] = {}
+    for message in messages:
+        key = message.get("thread_id") or message.get("message_id") or id(message)
+        head = threads.get(key)
+        if head is None:
+            threads[key] = {**message, "messages_in_thread": 1,
+                            "attachments": list(message["attachments"])}
+            continue
+        head["messages_in_thread"] += 1
+        for name in message["attachments"]:
+            if name not in head["attachments"]:
+                head["attachments"].append(name)
+        # Список идёт от свежих к старым, поэтому первым встреченным письмом
+        # цепочки и является самое свежее — его дата и тема остаются шапкой.
+    return list(threads.values())
 
 
 def stats(conn: sqlite3.Connection) -> dict:

@@ -38,7 +38,7 @@ from pathlib import Path
 
 VOCAB_FILE = "sparse_vocab.json"
 
-# `\w` з re.UNICODE, а не `[a-z0-9]`: ASCII-клас лишає від «Статут ТОВ АТОН-ГРУП
+# `\w` з re.UNICODE, а не `[a-z0-9]`: ASCII-клас лишає від «Статут ТОВ А**Н-Г**П
 # нова редакція 2020» один токен `2020`. Історія в README.
 _TOKEN = re.compile(r"\w+", re.UNICODE)
 
@@ -92,7 +92,7 @@ def query_vector(query: str, vocabulary: dict[str, list]) -> dict[int, float]:
 
     Не одиниця за унікальний токен, і це не дрібниця. Заміряно: з одиницями
     набір давав 13/17 hit@1 проти 14/17 у `rank_bm25`, і розійшлися вони саме
-    там, де термін у запиті повторювався — «advisory agreement Sokrat Financial
+    там, де термін у запиті повторювався — «advisory agreement S****t Financial
     **Advisory**». `rank_bm25` рахує такий термін двічі, бо підсумовує по
     токенах запиту, а не по множині. Уся вага документа вже в його векторі,
     тому тут лишається тільки частота в запиті — і тоді формули збігаються.

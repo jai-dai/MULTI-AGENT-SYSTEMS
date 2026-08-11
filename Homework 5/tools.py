@@ -317,7 +317,8 @@ def knowledge_search(query: str, top_n: int = settings.rerank_top_n,
 
 
 def list_mail(since: str | None = None, until: str | None = None,
-              correspondent: str | None = None, limit: int = 20) -> str:
+              correspondent: str | None = None, limit: int = 20,
+              rank: bool = False) -> str:
     """Перечислить письма за период — не поиск, а инвентаризация.
 
     Отдельный инструмент рядом с `knowledge_search`, потому что это другая
@@ -340,11 +341,37 @@ def list_mail(since: str | None = None, until: str | None = None,
         limit = 20
 
     try:
+        connection = store.connect(db)
+        # При ранжировании читается ВЕСЬ период, а не limit последних писем.
+        # Иначе сортировка врёт: в первой версии окно было limit*10, и июньская
+        # цепочка с юристами не попала в топ просто потому, что не поместилась в
+        # полсотни свежих. Отсортировать можно только то, что прочитал.
         rows = store.list_messages(
-            store.connect(db), since=since, until=until,
-            correspondent=(correspondent or "").strip(), limit=limit)
+            connection, since=since, until=until,
+            correspondent=(correspondent or "").strip(),
+            limit=10_000 if rank else limit)
     except Exception as exc:
         return f"ERROR: listing mail failed ({type(exc).__name__}: {exc})."
+
+    ranking = None
+    if rank:
+        import importance
+        rules = importance.load()
+        if not rules:
+            return ("ERROR: ranking needs weights.yaml, and it is missing or "
+                    "unreadable. Call list_mail without rank to get messages "
+                    "by date.")
+        wrote_to = {address.lower() for row in connection.execute(
+            "SELECT to_json FROM messages WHERE LOWER(sender_email) = LOWER(?)",
+            (settings.imap_user,))
+            for entry in json.loads(row["to_json"] or "[]")
+            if (address := entry.get("email"))}
+        rows = store.collapse_threads(rows)
+        ranking = [(importance.score(row, rules, wrote_to), row) for row in rows]
+        ranking = [pair for pair in ranking if not pair[0]["noise"]]
+        ranking.sort(key=lambda pair: -pair[0]["score"])
+        ranking = ranking[:limit]
+        rows = [row for _, row in ranking]
 
     period = " ".join(filter(None, [f"since {since}" if since else "",
                                     f"until {until}" if until else "",
@@ -354,12 +381,24 @@ def list_mail(since: str | None = None, until: str | None = None,
                 "The database is a SNAPSHOT — it holds what the last IMAP fetch "
                 "brought in, not live mail.")
 
-    lines = [f"{len(rows)} message(s){' for ' + period if period else ''}, newest first. "
+    order = ("by importance (see weights.yaml), threads collapsed"
+             if ranking else "newest first")
+    lines = [f"{len(rows)} message(s){' for ' + period if period else ''}, {order}. "
              "This is the local snapshot, not live mail."]
-    for row in rows:
+    for index, row in enumerate(rows):
         who = row["sender_name"] or row["sender_email"]
+        mark = ""
+        if ranking:
+            verdict = ranking[index][0]
+            thread = row.get("messages_in_thread", 1)
+            # Балл идёт вместе с причинами. Число важности без объяснения
+            # непроверяемо: его нельзя ни оспорить, ни поправить, и модель
+            # начнёт выдавать его за факт вместо настройки в файле.
+            mark = (f" | importance {verdict['score']}"
+                    + (f", {thread} messages in thread" if thread > 1 else "")
+                    + f"\n  why: {'; '.join(verdict['reasons'])}")
         head = (f"\n[{row['date'][:16]}] {who} <{row['sender_email']}> "
-                f"→ {', '.join(row['to_emails']) or '—'}\n  {row['subject']}")
+                f"→ {', '.join(row['to_emails']) or '—'}{mark}\n  {row['subject']}")
         if row["attachments"]:
             # Имена вложений — мост между двумя индексами: сами файлы лежат в
             # индексе документов, и по имени их достаёт knowledge_search.
@@ -411,7 +450,7 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                         "description": (
                             "Optional: restrict to messages where this fragment "
                             "appears in the sender, To or Cc — an address or a "
-                            "domain, e.g. 'law-lin', 'aton.ua', 'pashkina'. Use "
+                            "domain, e.g. 'l*w-l*n', 'a**n.ua', 'p******a'. Use "
                             "it for questions about WHO a message involves; the "
                             "`query` still has to say WHAT it is about. A "
                             "correspondent filter with a vague query returns the "
@@ -489,7 +528,7 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                         "type": "string",
                         "description": (
                             "Optional: fragment of an address or domain that must "
-                            "appear in sender, To or Cc — e.g. 'aton.ua'."
+                            "appear in sender, To or Cc — e.g. 'a**n.ua'."
                         ),
                     },
                     "limit": {
@@ -497,6 +536,23 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                         "description": "How many messages to return (default 20).",
                         "minimum": 1,
                         "maximum": 100,
+                    },
+                    "rank": {
+                        "type": "boolean",
+                        "description": (
+                            "Sort by IMPORTANCE instead of date, collapsing each "
+                            "thread to one line, and show why each score came "
+                            "out as it did. Importance comes from weights.yaml, "
+                            "written by the user: counterparty weights, topic "
+                            "multipliers, and a floor for anything carrying a "
+                            "deadline. Nothing is learned from the mailbox — by "
+                            "message count the top of this mailbox is "
+                            "newsletters. Use it for 'what matters', 'what "
+                            "needs attention'; quote the stated reasons rather "
+                            "than inventing your own, and say that the ordering "
+                            "is a configured judgement, not a fact about the "
+                            "messages."
+                        ),
                     },
                 },
                 "required": [],

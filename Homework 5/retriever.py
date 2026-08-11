@@ -40,7 +40,7 @@ from config import settings
 
 # Токенизатор ОДИН на проект и живёт в sparse.py. Разошедшиеся токенизаторы —
 # не гипотетическая опасность: ASCII-класс `[a-z0-9]+` уже оставлял от «Статут
-# ТОВ АТОН-ГРУП нова редакція 2020» единственный токен `2020` и выключал стадию
+# ТОВ А**Н-Г**П нова редакція 2020» единственный токен `2020` и выключал стадию
 # BM25 целиком, молча. История в README.
 _tokenize = sparse.tokenize
 
@@ -196,7 +196,7 @@ def resolve_correspondent(pattern: str, name: str | None = None) -> dict[str, li
 
     Метаданные не ищутся сходством векторов: реранкер обучен на «отвечает ли
     пассаж на вопрос», а не «совпал ли адресат». Замер: «що я відправляв у
-    24print» находит нужное письмо, но получает score 0.028 и confident=False.
+    2*****t» находит нужное письмо, но получает score 0.028 и confident=False.
     Поэтому вопрос про участника — это ФИЛЬТР, а не запрос.
     """
     needle = pattern.strip().lower()
@@ -334,6 +334,14 @@ def positions_for(pattern: str, name: str | None = None) -> list[int]:
     return out
 
 
+def _weights() -> dict:
+    """Правила важности, один раз на процесс. Пустой словарь, если файла нет."""
+    if "weights" not in _shared:
+        import importance
+        _shared["weights"] = importance.load()
+    return _shared["weights"]
+
+
 def positions_in_period(since: str | None, until: str | None,
                         name: str | None = None) -> list[int]:
     """Номера чанков, чья дата попадает в период.
@@ -440,6 +448,20 @@ def retrieve(query: str, top_k: int = None, top_n: int = None,
         ranked = [(doc_id, round(1.0 / (rank + 1), 4))
                   for rank, doc_id in enumerate(fused[:top_n])]
         confident = True
+
+    # Мягкий буст по важности отправителя. Именно мягкий и именно последним:
+    # поиск обязан отвечать на заданный вопрос, а не подсовывать важное вместо
+    # релевантного. Множитель (1 + k·вес) двигает порядок только там, где
+    # реранкер и так колеблется; при k=0 стадия исчезает целиком.
+    boost = _weights().get("tuning", {}).get("search_boost", 0) if _weights() else 0
+    if boost:
+        rules = _weights()
+        import importance
+        ranked = sorted(
+            ((key, s * (1 + boost * importance.weight_of(
+                chunk_at(key).get("sender_email") or "", rules)))
+             for key, s in ranked),
+            key=lambda pair: pair[1], reverse=True)
 
     semantic_set, lexical_set = set(semantic), set(lexical)
     results = [{

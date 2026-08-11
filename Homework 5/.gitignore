@@ -12,3 +12,8 @@ index*/
 .idea/
 .venv/
 .DS_Store
+
+# Личные данные: домены контрагентов и разметка по своему корпусу.
+# В репозиторий уезжают только *.example — см. weights.example.yaml.
+weights.yaml
+eval_queries.json
