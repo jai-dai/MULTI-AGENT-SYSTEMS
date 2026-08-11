@@ -231,7 +231,8 @@ def read_report(filename: str) -> str:
 
 def knowledge_search(query: str, top_n: int = settings.rerank_top_n,
                      source: str | None = None,
-                     correspondent: str | None = None) -> str:
+                     correspondent: str | None = None,
+                     since: str | None = None, until: str | None = None) -> str:
     """Hybrid search over the local knowledge base (see retriever.py)."""
     query = str(query).strip()
     if not query:
@@ -251,9 +252,11 @@ def knowledge_search(query: str, top_n: int = settings.rerank_top_n,
 
     source = str(source).strip() if source else None
     correspondent = str(correspondent).strip() if correspondent else None
+    since = str(since).strip() if since else None
+    until = str(until).strip() if until else None
     try:
         found = retrieve(query, top_n=top_n, source=source,
-                         correspondent=correspondent)
+                         correspondent=correspondent, since=since, until=until)
     except FileNotFoundError as exc:
         return f"ERROR: {exc}"
     except Exception as exc:
@@ -269,8 +272,11 @@ def knowledge_search(query: str, top_n: int = settings.rerank_top_n,
                     "name, so nothing was searched. Drop the source filter or "
                     "use a different fragment of the filename.")
         scope = f" in files matching '{source}'" if source else ""
+        if since or until:
+            scope += f" dated {since or '…'}..{until or '…'}"
         return (f"No passages in the knowledge base match '{query}'{scope}. "
-                "Try different wording, or search the web instead.")
+                "Try different wording, a wider date range, or search the web "
+                "instead.")
 
     stages = found["stages"]
     header = (f"{len(results)} passage(s) for '{query}' "
@@ -308,6 +314,59 @@ def knowledge_search(query: str, top_n: int = settings.rerank_top_n,
             f"score={r['score']} via {origin}\n"
             f"{_truncate(r['text'], settings.max_url_content_length)}")
     return header + "\n" + "\n".join(blocks)
+
+
+def list_mail(since: str | None = None, until: str | None = None,
+              correspondent: str | None = None, limit: int = 20) -> str:
+    """Перечислить письма за период — не поиск, а инвентаризация.
+
+    Отдельный инструмент рядом с `knowledge_search`, потому что это другая
+    операция. Векторный поиск отвечает «что похоже на вопрос» и возвращает
+    top-K; спросить его «что приходило вчера» нельзя — письмо без словесных
+    совпадений не попадёт в выдачу, даже если оно единственное за день.
+    """
+    try:
+        from mailprep import store
+    except ImportError as exc:
+        return f"ERROR: mail module unavailable ({exc})."
+
+    db = Path(__file__).parent / settings.mail_db
+    if not db.exists():
+        return (f"ERROR: no mail database at {db} — run "
+                "`python -m mailprep.imap_fetch` first.")
+    try:
+        limit = max(1, min(int(limit), 100))
+    except (TypeError, ValueError):
+        limit = 20
+
+    try:
+        rows = store.list_messages(
+            store.connect(db), since=since, until=until,
+            correspondent=(correspondent or "").strip(), limit=limit)
+    except Exception as exc:
+        return f"ERROR: listing mail failed ({type(exc).__name__}: {exc})."
+
+    period = " ".join(filter(None, [f"since {since}" if since else "",
+                                    f"until {until}" if until else "",
+                                    f"correspondent '{correspondent}'" if correspondent else ""]))
+    if not rows:
+        return (f"No messages in the local mail database{' for ' + period if period else ''}. "
+                "The database is a SNAPSHOT — it holds what the last IMAP fetch "
+                "brought in, not live mail.")
+
+    lines = [f"{len(rows)} message(s){' for ' + period if period else ''}, newest first. "
+             "This is the local snapshot, not live mail."]
+    for row in rows:
+        who = row["sender_name"] or row["sender_email"]
+        head = (f"\n[{row['date'][:16]}] {who} <{row['sender_email']}> "
+                f"→ {', '.join(row['to_emails']) or '—'}\n  {row['subject']}")
+        if row["attachments"]:
+            # Имена вложений — мост между двумя индексами: сами файлы лежат в
+            # индексе документов, и по имени их достаёт knowledge_search.
+            head += ("\n  attachments (searchable by name via knowledge_search "
+                     f"source=…): {', '.join(row['attachments'])}")
+        lines.append(head)
+    return "\n".join(lines)
 
 
 # --------------------------------------------------------------------------- #
@@ -373,8 +432,74 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                             "that matches no file returns nothing at all."
                         ),
                     },
+                    "since": {
+                        "type": "string",
+                        "description": (
+                            "Optional: only passages dated on or after this day, "
+                            "YYYY-MM-DD. The date is the document's own where it "
+                            "has one, the message date for mail. Passages with "
+                            "no date are excluded by any date filter — they "
+                            "cannot prove they belong in the period."
+                        ),
+                    },
+                    "until": {
+                        "type": "string",
+                        "description": (
+                            "Optional: only passages dated on or before this day, "
+                            "YYYY-MM-DD (inclusive)."
+                        ),
+                    },
                 },
                 "required": ["query"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_mail",
+            "description": (
+                "LIST messages from the local mail snapshot, newest first, with "
+                "sender, recipients, subject and attachment filenames. This is "
+                "enumeration, not search: use it for 'what arrived yesterday', "
+                "'what did I send to X last week', 'which documents came by "
+                "mail today'. knowledge_search cannot answer those — it ranks by "
+                "similarity to a query and returns only the top few, so a "
+                "message that shares no wording with the question is invisible "
+                "to it even when it is the only message of that day. "
+                "The database is a SNAPSHOT taken by the last IMAP fetch, not "
+                "live mail: say so when the answer depends on freshness. "
+                "Attachment filenames returned here are searchable with "
+                "knowledge_search(source=…), which is how you get from a "
+                "message to the contents of what it carried."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "since": {
+                        "type": "string",
+                        "description": "Only messages on or after this day, YYYY-MM-DD.",
+                    },
+                    "until": {
+                        "type": "string",
+                        "description": "Only messages on or before this day, YYYY-MM-DD.",
+                    },
+                    "correspondent": {
+                        "type": "string",
+                        "description": (
+                            "Optional: fragment of an address or domain that must "
+                            "appear in sender, To or Cc — e.g. 'aton.ua'."
+                        ),
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "How many messages to return (default 20).",
+                        "minimum": 1,
+                        "maximum": 100,
+                    },
+                },
+                "required": [],
                 "additionalProperties": False,
             },
         },
@@ -502,6 +627,7 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
 # name -> implementation
 TOOL_REGISTRY = {
     "knowledge_search": knowledge_search,
+    "list_mail": list_mail,
     "web_search": web_search,
     "read_url": read_url,
     "write_report": write_report,

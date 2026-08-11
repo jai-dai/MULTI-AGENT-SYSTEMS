@@ -334,8 +334,37 @@ def positions_for(pattern: str, name: str | None = None) -> list[int]:
     return out
 
 
+def positions_in_period(since: str | None, until: str | None,
+                        name: str | None = None) -> list[int]:
+    """Номера чанков, чья дата попадает в период.
+
+    Отбор идёт по списку чанков, а не фильтром Qdrant, и это не лень. Даты в
+    двух индексах записаны по-разному: у документов `2020-09-22`, у писем полная
+    ISO-метка `2026-08-06T11:47:20`. Диапазонный фильтр хранилища требует одного
+    типа на поле, а сравнение первых десяти символов работает для обоих: в ISO
+    8601 лексикографический порядок совпадает с хронологическим. Дальше список
+    уходит в `ids`, который оба бэкенда уже умеют.
+    """
+    low = (since or "")[:10]
+    high = (until or "")[:10]
+    out = []
+    for position, chunk in enumerate(_load(name)["chunks"]):
+        stamp = (chunk.get("date") or "")[:10]
+        if not stamp:
+            # Без даты чанк не может подтвердить, что попадает в период. Тихо
+            # включить его значило бы ответить «за вчера» документом без даты.
+            continue
+        if low and stamp < low:
+            continue
+        if high and stamp > high:
+            continue
+        out.append(position)
+    return out
+
+
 def retrieve(query: str, top_k: int = None, top_n: int = None,
-             source: str | None = None, correspondent: str | None = None) -> dict:
+             source: str | None = None, correspondent: str | None = None,
+             since: str | None = None, until: str | None = None) -> dict:
     """Run the whole pipeline; returns results plus per-stage counts.
 
     `source` narrows the search to files whose NAME contains that substring,
@@ -361,6 +390,14 @@ def retrieve(query: str, top_k: int = None, top_n: int = None,
         ids = positions_for(correspondent, name) if correspondent else None
         if correspondent and not ids:
             continue
+        if since or until:
+            dated = positions_in_period(since, until, name)
+            # Два фильтра — это И, а не ИЛИ: «что присылал Хетцнер в августе»
+            # означает пересечение, и объединение вернуло бы весь август плюс
+            # всю переписку с Хетцнером, то есть ответ на другой вопрос.
+            ids = sorted(set(ids) & set(dated)) if ids is not None else dated
+            if not ids:
+                continue
         sources = resolve_sources(source, name) if source else None
         if source and not sources:
             continue

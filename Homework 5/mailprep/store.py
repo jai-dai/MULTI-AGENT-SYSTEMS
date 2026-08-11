@@ -184,6 +184,60 @@ def load_all(conn: sqlite3.Connection, since: str | None = None,
     return rows
 
 
+def list_messages(conn: sqlite3.Connection, since: str | None = None,
+                  until: str | None = None, correspondent: str = "",
+                  limit: int = 30, include_bulk: bool = False) -> list[dict]:
+    """Письма за период — ПЕРЕЧИСЛЕНИЕ, а не поиск по смыслу.
+
+    Векторный поиск отвечает на «что похоже на мой вопрос» и физически не умеет
+    ответить на «что приходило вчера»: он возвращает top-K по релевантности, и
+    письмо без единого совпадения слов в него не попадёт, даже если оно
+    единственное за этот день. Это разные операции, и подменять одну другой
+    значит уверенно терять письма.
+
+    Даты сравниваются как строки: в базе ISO 8601, где лексикографический
+    порядок совпадает с хронологическим. `until` дополняется до конца суток,
+    иначе «до 2026-08-06» отсекало бы весь этот день.
+    """
+    sql = "SELECT rfc_message_id, thread_id, date, sender_email, sender_name, " \
+          "       subject, to_json, cc_json, attachments, folder, is_bulk " \
+          "FROM messages"
+    where, params = [], []
+    if since:
+        where.append("date >= ?")
+        params.append(since)
+    if until:
+        where.append("date <= ?")
+        params.append(until if len(until) > 10 else until + "T23:59:59")
+    if not include_bulk:
+        where.append("is_bulk = 0")
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " ORDER BY date DESC"
+
+    needle = correspondent.strip().lower()
+    out = []
+    for row in conn.execute(sql, params):
+        participants = " ".join([
+            row["sender_email"] or "", row["to_json"] or "", row["cc_json"] or ""]).lower()
+        if needle and needle not in participants:
+            continue
+        attachments = [a.get("filename", "") for a in json.loads(row["attachments"] or "[]")]
+        out.append({
+            "date": row["date"],
+            "sender_email": row["sender_email"],
+            "sender_name": row["sender_name"],
+            "subject": row["subject"] or "(без темы)",
+            "to_emails": [a["email"] for a in json.loads(row["to_json"] or "[]")
+                          if a.get("email")],
+            "attachments": [a for a in attachments if a],
+            "folder": row["folder"],
+        })
+        if len(out) >= limit:
+            break
+    return out
+
+
 def stats(conn: sqlite3.Connection) -> dict:
     row = conn.execute(
         """SELECT COUNT(*) AS messages,

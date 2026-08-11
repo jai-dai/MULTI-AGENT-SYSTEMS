@@ -59,21 +59,26 @@ def ranked_ids(query: str, mode: str) -> list[tuple[str, int]]:
     в агенте, а не его однобокий вариант.
     """
     top_k = settings.retrieval_top_k
-    semantic: list[tuple[str, int]] = []
-    lexical: list[tuple[str, int]] = []
+    by_index_semantic: list[list[tuple[str, int]]] = []
+    by_index_lexical: list[list[tuple[str, int]]] = []
     per_index = []
 
     for name in retriever.index_names():
         near = [(name, i) for i in retriever.semantic_search(query, top_k, name=name)]
         words = [(name, i) for i in retriever.bm25_search(query, top_k, name=name)]
-        semantic += near
-        lexical += words
+        by_index_semantic.append(near)
+        by_index_lexical.append(words)
         per_index.append(retriever.reciprocal_rank_fusion([near, words]))
 
+    # Одностадийные конфигурации тоже сливаются между индексами через RRF, а не
+    # склеиваются подряд. Склейка была ошибкой замера и стоила дорого: кандидаты
+    # второго индекса уезжали на позиции 11-20, метрика брала top-3, и semantic
+    # с bm25 показывали ноль на ВСЕХ почтовых запросах. Число получалось не про
+    # качество стадии, а про порядок конкатенации.
     if mode == "semantic":
-        return semantic
+        return retriever.reciprocal_rank_fusion(by_index_semantic)
     if mode == "bm25":
-        return lexical
+        return retriever.reciprocal_rank_fusion(by_index_lexical)
     fused = retriever.reciprocal_rank_fusion(per_index)
     if mode != "reranked":
         return fused
