@@ -36,6 +36,9 @@ _TRAFILATURA_CONFIG.set(
 
 _MAX_SNIPPET_LENGTH = 400
 
+# Сколько писем одного контрагента показывать в ранжированном дайджесте.
+PER_COUNTERPARTY_LIMIT = 2
+
 # Below this, an "article" is almost certainly an abstract or a landing page.
 _SHORT_PAGE_THRESHOLD = 1200
 
@@ -370,7 +373,25 @@ def list_mail(since: str | None = None, until: str | None = None,
         ranking = [(importance.score(row, rules, wrote_to), row) for row in rows]
         ranking = [pair for pair in ranking if not pair[0]["noise"]]
         ranking.sort(key=lambda pair: -pair[0]["score"])
-        ranking = ranking[:limit]
+
+        # Не больше двух писем одного контрагента. Замер на живой скриньке: у
+        # контрагента с весом 97 и восемнадцатью письмами получилось 17 строк из
+        # 20, и обзор «что важного» превратился в «письма от одного человека».
+        # Веса при этом были верные — ломался жанр: дайджест должен показывать
+        # РАЗНОЕ важное, а не самое важное много раз.
+        shown: dict[str, int] = {}
+        hidden: dict[str, int] = {}
+        kept = []
+        for verdict, row in ranking:
+            key = verdict["counterparty"] or (row["sender_email"] or "?")
+            if shown.get(key, 0) >= PER_COUNTERPARTY_LIMIT:
+                hidden[key] = hidden.get(key, 0) + 1
+                continue
+            if len(kept) >= limit:
+                break
+            shown[key] = shown.get(key, 0) + 1
+            kept.append((verdict, row))
+        ranking = kept
         rows = [row for _, row in ranking]
 
     period = " ".join(filter(None, [f"since {since}" if since else "",
@@ -391,12 +412,22 @@ def list_mail(since: str | None = None, until: str | None = None,
         if ranking:
             verdict = ranking[index][0]
             thread = row.get("messages_in_thread", 1)
+            key = verdict["counterparty"] or (row["sender_email"] or "?")
+            # Свёрнутое показывается на ПОСЛЕДНЕЙ строке контрагента: иначе
+            # отсечённое исчезает молча, а это ровно то, чего дайджест делать
+            # не должен — он обязан сказать, чего в нём нет.
+            rest = hidden.pop(key, 0) if index == len(rows) - 1 or (
+                index + 1 < len(rows)
+                and (ranking[index + 1][0]["counterparty"]
+                     or rows[index + 1]["sender_email"]) != key) else 0
             # Балл идёт вместе с причинами. Число важности без объяснения
             # непроверяемо: его нельзя ни оспорить, ни поправить, и модель
             # начнёт выдавать его за факт вместо настройки в файле.
             mark = (f" | importance {verdict['score']}"
                     + (f", {thread} messages in thread" if thread > 1 else "")
-                    + f"\n  why: {'; '.join(verdict['reasons'])}")
+                    + f"\n  why: {'; '.join(verdict['reasons'])}"
+                    + (f"\n  … ещё {rest} от этого же отправителя не показано"
+                       if rest else ""))
         head = (f"\n[{row['date'][:16]}] {who} <{row['sender_email']}> "
                 f"→ {', '.join(row['to_emails']) or '—'}{mark}\n  {row['subject']}")
         if row["attachments"]:

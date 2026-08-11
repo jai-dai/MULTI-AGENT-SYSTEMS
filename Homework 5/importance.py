@@ -21,6 +21,7 @@
 from __future__ import annotations
 
 import fnmatch
+import re
 from pathlib import Path
 
 WEIGHTS_FILE = "weights.yaml"
@@ -30,6 +31,27 @@ WEIGHTS_FILE = "weights.yaml"
 # ранжирование вырождалось именно там, где оно нужнее всего. Шкала здесь
 # относительная, и 190 честнее прижатой сотни.
 WEIGHT_SCALE = 100
+
+
+def _stem_match(haystack: str, patterns: list[str]) -> bool:
+    """Совпадение по НАЧАЛУ слова, а не по любому месту внутри него.
+
+    Простая подстрока подводит в обе стороны. `test` находился внутри `latest`
+    — заміряно, тема «releases latest Clarity Act text» попадала в «рутину» с
+    множителем 0.6. А сузить до точного слова тоже нельзя: `заборгован` обязан
+    ловить «заборгованості», иначе украинские падежи придётся перечислять
+    руками, и первый же непредусмотренный отправит письмо со сроком вниз.
+
+    Граница слова слева плюс свободный хвост справа даёт и то, и другое: основа
+    работает, `latest` больше не считается тестом.
+
+    Цена честная: составные слова так не находятся — `оплат` не совпадёт с
+    «передоплата». Такие формы вписываются в конфиг отдельной строкой, и это
+    лучше случайных попаданий.
+    """
+    return any(re.search(r"\b" + re.escape(str(pattern).strip()), haystack,
+                         re.IGNORECASE | re.UNICODE)
+               for pattern in patterns if str(pattern).strip())
 
 
 def _match(value: str, patterns: list[str]) -> bool:
@@ -112,7 +134,7 @@ def score(message: dict, rules: dict, wrote_to: set[str] | None = None) -> dict:
     # единственное письмо, пропуск которого стоит денег.
     topic = None
     for entry in rules.get("topics") or []:
-        if any(str(p).lower() in haystack for p in entry.get("match") or []):
+        if _stem_match(haystack, entry.get("match") or []):
             topic = entry
             break                       # одна тема на письмо — самая первая
 
@@ -137,7 +159,7 @@ def score(message: dict, rules: dict, wrote_to: set[str] | None = None) -> dict:
 
     signature = (message.get("body_preview") or "")[-400:].lower()
     for entry in rules.get("roles") or []:
-        if any(str(p).lower() in signature for p in entry.get("match") or []):
+        if _stem_match(signature, entry.get("match") or []):
             multiplier = float(entry.get("multiplier", 1))
             base *= multiplier
             reasons.append(f"должность в подписи: ×{multiplier}")
