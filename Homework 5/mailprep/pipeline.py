@@ -112,7 +112,7 @@ def _context_header(thread: Thread, msg: CleanMessage, idx: int) -> str:
     # информации вообще — так подписаны все. Информативно ровно «Кому», а без
     # него запрос «что я писал в 2*****t» не с чем сопоставить: адресата нет ни
     # в одном эмбеддинге. Имена, а не только адреса: спрашивают «что писали
-    # Пашкиной», а не «office@p******a.shoes».
+    # П*****й», а не «office@p******a.shoes».
     to_line = ", ".join(str(a) for a in msg.to[:6]) or "—"
     if len(msg.to) > 6:
         to_line += f" и ещё {len(msg.to) - 6}"
