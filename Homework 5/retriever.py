@@ -46,20 +46,32 @@ _tokenize = sparse.tokenize
 
 # Loaded once per process: the index and the reranker are expensive to build
 # and the agent calls knowledge_search many times per session.
-_state: dict = {}
+_states: dict[str, dict] = {}
 
 
-def _index_dir() -> Path:
-    return Path(__file__).parent / settings.index_dir
+def index_names() -> list[str]:
+    """Индексы, по которым идёт поиск, в порядке из настроек.
+
+    SEARCH_INDEX_DIRS перечисляет их через запятую; пусто — значит один
+    INDEX_DIR. Разделение намеренное: писать `ingest.py` может только в ОДИН
+    индекс, и слить эти две настройки означало бы сделать запись двусмысленной.
+    """
+    raw = settings.search_index_dirs or settings.index_dir
+    return [name.strip() for name in raw.split(",") if name.strip()]
 
 
-def _load() -> dict:
-    if _state:
-        return _state
+def _index_dir(name: str | None = None) -> Path:
+    return Path(__file__).parent / (name or settings.index_dir)
 
-    directory = _index_dir()
+
+def _load(name: str | None = None) -> dict:
+    name = name or index_names()[0]
+    if name in _states:
+        return _states[name]
+
+    directory = _index_dir(name)
     chunks_path = directory / "chunks.json"
-    store = vectorstore.get_store()
+    store = vectorstore.get_store(directory=name)
     if not store.exists() or not chunks_path.exists():
         raise FileNotFoundError(
             f"no {store.name} knowledge index in {directory} — run "
@@ -91,22 +103,26 @@ def _load() -> dict:
         from rank_bm25 import BM25Okapi
         bm25 = BM25Okapi([_tokenize(c["text"]) for c in chunks])
 
-    _state.update({
+    _states[name] = {
+        "name": name,
         "chunks": chunks,
         "store": store,
         "vocabulary": vocabulary,
         "bm25": bm25,
-        "reranker": None,
-    })
-    return _state
+    }
+    return _states[name]
+
+
+# Реранкер и порог общие на процесс, а не на индекс: модель одна, и грузить её
+# по разу на каждый индекс значило бы платить 1.1 ГБ дважды.
+_shared: dict = {}
 
 
 def _reranker():
-    state = _load()
-    if state["reranker"] is None:
+    if "reranker" not in _shared:
         from sentence_transformers import CrossEncoder
-        state["reranker"] = CrossEncoder(settings.reranker_model, max_length=512)
-    return state["reranker"]
+        _shared["reranker"] = CrossEncoder(settings.reranker_model, max_length=512)
+    return _shared["reranker"]
 
 
 # One pair the model must score high, one it must score low. The distance
@@ -136,25 +152,24 @@ def rerank_threshold() -> float:
     An explicit RERANK_MIN_SCORE in the environment always wins — measurement
     is the default, not a policy.
     """
-    state = _load()
-    if state.get("threshold") is not None:
-        return state["threshold"]
+    if "threshold" in _shared:
+        return _shared["threshold"]
 
     if "rerank_min_score" in settings.model_fields_set:
-        state["threshold"] = settings.rerank_min_score
-        return state["threshold"]
+        _shared["threshold"] = settings.rerank_min_score
+        return _shared["threshold"]
 
     try:
         relevant, irrelevant = (float(s) for s in _reranker().predict(_PROBE_PAIRS))
     except Exception:                       # never let calibration break search
-        state["threshold"] = settings.rerank_min_score
-        return state["threshold"]
+        _shared["threshold"] = settings.rerank_min_score
+        return _shared["threshold"]
 
     if relevant <= irrelevant:              # model cannot tell them apart
-        state["threshold"] = settings.rerank_min_score
+        _shared["threshold"] = settings.rerank_min_score
     else:
-        state["threshold"] = irrelevant + (relevant - irrelevant) * _NOISE_MARGIN
-    return state["threshold"]
+        _shared["threshold"] = irrelevant + (relevant - irrelevant) * _NOISE_MARGIN
+    return _shared["threshold"]
 
 
 # --------------------------------------------------------------------------- #
@@ -162,7 +177,7 @@ def rerank_threshold() -> float:
 # --------------------------------------------------------------------------- #
 
 
-def resolve_sources(pattern: str) -> list[str]:
+def resolve_sources(pattern: str, name: str | None = None) -> list[str]:
     """Filename substring -> the exact filenames it matches.
 
     The substring is resolved HERE, where the chunk list already lives, so the
@@ -172,11 +187,11 @@ def resolve_sources(pattern: str) -> list[str]:
     needle = pattern.strip().lower()
     if not needle:
         return []
-    return sorted({c["source"] for c in _load()["chunks"]
+    return sorted({c["source"] for c in _load(name)["chunks"]
                    if needle in c["source"].lower()})
 
 
-def resolve_correspondent(pattern: str) -> dict[str, list[str]]:
+def resolve_correspondent(pattern: str, name: str | None = None) -> dict[str, list[str]]:
     """Фрагмент адреса/домена -> точные значения полей участников.
 
     Метаданные не ищутся сходством векторов: реранкер обучен на «отвечает ли
@@ -187,7 +202,7 @@ def resolve_correspondent(pattern: str) -> dict[str, list[str]]:
     needle = pattern.strip().lower()
     if not needle:
         return {}
-    chunks = _load()["chunks"]
+    chunks = _load(name)["chunks"]
     out: dict[str, set] = {"sender_email": set(), "to_emails": set(),
                            "cc_emails": set()}
     for chunk in chunks:
@@ -201,8 +216,9 @@ def resolve_correspondent(pattern: str) -> dict[str, list[str]]:
 
 def semantic_search(query: str, top_k: int,
                     sources: list[str] | None = None,
-                    ids: list[int] | None = None) -> list[int]:
-    state = _load()
+                    ids: list[int] | None = None,
+                    name: str | None = None) -> list[int]:
+    state = _load(name)
     # is_query=True: prefix-trained models score their own "query:" side
     # differently from the "passage:" side used at ingest time.
     vector = emb.embed_texts([query], is_query=True)
@@ -225,7 +241,8 @@ def semantic_search(query: str, top_k: int,
 
 def bm25_search(query: str, top_k: int,
                 sources: list[str] | None = None,
-                ids: list[int] | None = None) -> list[int]:
+                ids: list[int] | None = None,
+                name: str | None = None) -> list[int]:
     """Лексическая стадия. Считает её либо хранилище, либо rank_bm25 в памяти.
 
     Разница не только в том, где живёт индекс. У разреженных векторов в Qdrant
@@ -233,7 +250,7 @@ def bm25_search(query: str, top_k: int,
     плотных; rank_bm25 ничего не знает ни о payload, ни о фильтрах, поэтому
     ниже приходится ранжировать весь корпус и отбрасывать лишнее после.
     """
-    state = _load()
+    state = _load(name)
     if state["vocabulary"] is not None:
         return state["store"].search_sparse(
             sparse.query_vector(query, state["vocabulary"]), top_k,
@@ -262,8 +279,19 @@ def reciprocal_rank_fusion(rankings: list[list[int]], k: int = 60) -> list[int]:
     return sorted(fused, key=fused.get, reverse=True)
 
 
-def rerank(query: str, candidates: list[int],
-           top_n: int) -> tuple[list[tuple[int, float]], bool]:
+def chunk_at(key: tuple[str, int]) -> dict:
+    """Кандидат -> сам чанк. Кандидат это пара (индекс, позиция в нём).
+
+    Пара, а не число, потому что поиск идёт по нескольким индексам сразу: номер
+    7 существует в каждом из них и означает разное. Всё, что ниже слияния,
+    работает с этой парой и ни разу не спрашивает, из какого источника она.
+    """
+    name, position = key
+    return _load(name)["chunks"][position]
+
+
+def rerank(query: str, candidates: list[tuple[str, int]],
+           top_n: int) -> tuple[list[tuple[tuple[str, int], float]], bool]:
     """Score (query, passage) pairs with the cross-encoder.
 
     Порог ПОМЕЧАЕТ слабые пассажи, но не выбрасывает их. Раньше выбрасывал: при
@@ -281,8 +309,7 @@ def rerank(query: str, candidates: list[int],
 
     Returns (ranked, confident); `confident` is False когда порог не взял никто.
     """
-    state = _load()
-    pairs = [(query, state["chunks"][i]["text"]) for i in candidates]
+    pairs = [(query, chunk_at(key)["text"]) for key in candidates]
     scores = [float(s) for s in _reranker().predict(pairs)]
     ranked = sorted(zip(candidates, scores), key=lambda p: p[1], reverse=True)
     confident = any(score >= rerank_threshold() for _, score in ranked)
@@ -294,11 +321,11 @@ def rerank(query: str, candidates: list[int],
 # --------------------------------------------------------------------------- #
 
 
-def positions_for(pattern: str) -> list[int]:
+def positions_for(pattern: str, name: str | None = None) -> list[int]:
     """Номера чанков, где участник переписки совпал с фрагментом адреса."""
     needle = pattern.strip().lower()
     out = []
-    for position, chunk in enumerate(_load()["chunks"]):
+    for position, chunk in enumerate(_load(name)["chunks"]):
         haystack = [chunk.get("sender_email") or ""]
         haystack += chunk.get("to_emails") or []
         haystack += chunk.get("cc_emails") or []
@@ -320,61 +347,97 @@ def retrieve(query: str, top_k: int = None, top_n: int = None,
     top_k = top_k or settings.retrieval_top_k
     top_n = top_n or settings.rerank_top_n
 
-    ids = positions_for(correspondent) if correspondent else None
-    if correspondent and not ids:
-        return {"results": [], "confident": True, "filter": correspondent,
-                "matched_files": 0,
-                "stages": {"semantic": 0, "bm25": 0, "fused": 0}}
+    # Каждый индекс проходит СВОИ стадии, и только потом два ранжирования
+    # сливаются ещё одним RRF. Складывать скоры разных индексов было бы
+    # натяжкой: у письма и у договора разная природа релевантности, косинус
+    # 0.7 в одном не равен 0.7 в другом. Ранги сравнимы, величины — нет.
+    semantic: list[tuple[str, int]] = []
+    lexical: list[tuple[str, int]] = []
+    per_index: list[list[tuple[str, int]]] = []
+    matched_files = 0
+    empty_filter = True
 
-    sources = resolve_sources(source) if source else None
-    if source and not sources:
+    for name in index_names():
+        ids = positions_for(correspondent, name) if correspondent else None
+        if correspondent and not ids:
+            continue
+        sources = resolve_sources(source, name) if source else None
+        if source and not sources:
+            continue
+        empty_filter = False
+        matched_files += len(sources or [])
+
+        near = [(name, i) for i in semantic_search(query, top_k, sources, ids, name)]
+        words = [(name, i) for i in bm25_search(query, top_k, sources, ids, name)]
+        semantic += near
+        lexical += words
+        fused_here = reciprocal_rank_fusion([near, words])
+        if fused_here:
+            per_index.append(fused_here)
+
+    if empty_filter:
         # Silence here would look identical to "the documents say nothing",
         # which is a different and much more misleading answer.
-        return {"results": [], "confident": True, "filter": source,
-                "matched_files": 0,
+        return {"results": [], "confident": True,
+                "filter": source or correspondent, "matched_files": 0,
                 "stages": {"semantic": 0, "bm25": 0, "fused": 0}}
 
-    semantic = semantic_search(query, top_k, sources, ids)
-    lexical = bm25_search(query, top_k, sources, ids)
-    fused = reciprocal_rank_fusion([semantic, lexical])
+    fused = reciprocal_rank_fusion(per_index)
     if not fused:
         return {"results": [], "confident": True,
-                "filter": source, "matched_files": len(sources or []),
+                "filter": source, "matched_files": matched_files,
                 "stages": {"semantic": 0, "bm25": 0, "fused": 0}}
 
     floor = rerank_threshold() if settings.rerank_enabled else 0.0
     if settings.rerank_enabled:
-        ranked, confident = rerank(query, fused[:max(top_k, top_n)], top_n)
+        # Пул растёт с числом индексов, и это не щедрость. При фиксированных
+        # десяти кандидатах второй индекс занимает половину мест независимо от
+        # своего размера: почта на 137 чанков вытесняла документы из 7347.
+        # Замерено на разметке — фиксированный пул стоил 0.819 -> 0.778 MRR по
+        # пассажам; после правки глубина по каждому индексу прежняя.
+        pool = max(top_k * len(per_index), top_n)
+        ranked, confident = rerank(query, fused[:pool], top_n)
     else:
         # No cross-encoder: keep the fusion order and score each result by its
         # RRF position, so downstream code sees the same shape either way.
         ranked = [(doc_id, round(1.0 / (rank + 1), 4))
                   for rank, doc_id in enumerate(fused[:top_n])]
         confident = True
-    chunks = _load()["chunks"]
+
+    semantic_set, lexical_set = set(semantic), set(lexical)
     results = [{
-        "text": chunks[i]["text"],
-        "source": chunks[i]["source"],
-        "page": chunks[i]["page"],
+        "text": (chunk := chunk_at(key))["text"],
+        "source": chunk["source"],
+        "page": chunk["page"],
         "score": round(score, 4),
+        # Из какого индекса пришёл пассаж и что он такое. Письмо и документ
+        # цитируются по-разному — «[тема, лист 2]» против «[файл.pdf p.3]», —
+        # и агент обязан видеть разницу, а не догадываться по виду источника.
+        # Признак — `date_source`: его проставляет только ingest.py, читая файл
+        # с диска. У тела письма файла нет, значит нет и его.
+        "index": key[0],
+        "kind": ("mail" if not chunk.get("date_source")
+                 else "attachment" if chunk.get("message_id") else "document"),
         # Слабый пассаж теперь доезжает до агента, а не выбрасывается, — значит
         # он обязан приехать с меткой. Иначе разница между «сильное
         # свидетельство» и «лучшее из плохого» исчезает по дороге.
         "weak": bool(settings.rerank_enabled and score < floor),
-        "in_semantic": i in semantic,
-        "in_bm25": i in lexical,
+        "in_semantic": key in semantic_set,
+        "in_bm25": key in lexical_set,
         # Without a date the model cannot tell a charter from 2020 apart from
         # this year's, and quotes the stale one with the same confidence.
-        "date": chunks[i].get("date", ""),
-        "date_source": chunks[i].get("date_source", ""),
+        "date": (chunk.get("date") or "")[:10],
+        # У тела письма своей даты документа нет — там дата отправки, и
+        # называть её иначе значило бы соврать в шапке результата.
+        "date_source": chunk.get("date_source") or ("mail" if chunk.get("date") else ""),
         # Дата письма показывается отдельно и только когда отличается от даты
         # документа: «договір 2020 року, надіслали в червні 2026» — это две
         # разные величины, и склеивать их в одну значит терять одну из них.
-        "mail_date": chunks[i].get("mail_date", ""),
+        "mail_date": chunk.get("mail_date", ""),
         # Recognised from an image, so the wording may carry OCR errors —
         # the reader has to know that before quoting it verbatim.
-        "ocr": bool(chunks[i].get("ocr")),
-    } for i, score in ranked]
+        "ocr": bool(chunk.get("ocr")),
+    } for key, score in ranked]
 
     return {"results": results, "confident": confident,
             "filter": source, "matched_files": len(sources or []),
@@ -383,9 +446,16 @@ def retrieve(query: str, top_k: int = None, top_n: int = None,
 
 
 def index_stats() -> dict:
-    state = _load()
-    return {"chunks": len(state["chunks"]),
-            "sources": sorted({c["source"] for c in state["chunks"]})}
+    """Сводка по всем индексам, по которым идёт поиск."""
+    out = {"indexes": {}, "chunks": 0, "sources": []}
+    for name in index_names():
+        chunks = _load(name)["chunks"]
+        sources = sorted({c["source"] for c in chunks})
+        out["indexes"][name] = {"chunks": len(chunks), "sources": len(sources)}
+        out["chunks"] += len(chunks)
+        out["sources"] += sources
+    out["sources"] = sorted(set(out["sources"]))
+    return out
 
 
 if __name__ == "__main__":                          # manual check

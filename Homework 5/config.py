@@ -120,6 +120,13 @@ class Settings(BaseSettings):
     ocr_max_pages: int = 40
     tesseract_cmd: str = "tesseract"
     index_dir: str = "index"
+    # Индексы, по которым ИЩЕТ агент, через запятую. Пусто — ищем в index_dir.
+    # Две настройки, а не одна, потому что запись и чтение здесь несимметричны:
+    # `ingest.py` пишет ровно в один индекс, а поиск честно идёт по нескольким.
+    # Тела писем и документы лежат раздельно не по недосмотру — у них разные
+    # конвейеры и разные схемы чанка, — но вопрос «что мне присылали по АТОН»
+    # не знает об этом делении, и знать не должен.
+    search_index_dirs: str = ""
     # Which engine holds the vectors: "faiss" | "qdrant" (see vectorstore.py).
     # Not a RAM decision — 6409 vectors are 25 MB either way, against 1.1 GB for
     # the reranker. Qdrant buys metadata filtering, incremental writes and

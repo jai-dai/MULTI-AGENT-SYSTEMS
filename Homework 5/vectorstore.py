@@ -53,8 +53,14 @@ from config import settings
 COLLECTION = "knowledge"
 
 
-def index_dir() -> Path:
-    return Path(__file__).parent / settings.index_dir
+def index_dir(name: str | None = None) -> Path:
+    """Каталог индекса. Без аргумента — тот, что настроен для записи.
+
+    Имя появилось, когда поиск научился идти по нескольким индексам сразу:
+    писать в один и тот же процесс может только в один индекс, а читать —
+    из всех сразу.
+    """
+    return Path(__file__).parent / (name or settings.index_dir)
 
 
 # --------------------------------------------------------------------------- #
@@ -72,15 +78,16 @@ class FaissStore:
     # brings it back. That gap is the reason this abstraction exists.
     supports_filter = False
 
-    def __init__(self) -> None:
+    def __init__(self, directory: str | None = None) -> None:
         import faiss
 
         self._faiss = faiss
         self._index = None
+        self._dir = directory
 
     @property
     def path(self) -> Path:
-        return index_dir() / self.filename
+        return index_dir(self._dir) / self.filename
 
     def exists(self) -> bool:
         return self.path.exists()
@@ -133,16 +140,17 @@ class QdrantStore:
     # Имя разреженного вектора внутри точки. Плотный остаётся безымянным.
     SPARSE_NAME = "bm25"
 
-    def __init__(self) -> None:
+    def __init__(self, directory: str | None = None) -> None:
         from qdrant_client import QdrantClient, models
 
         self._models = models
         self._QdrantClient = QdrantClient
         self._client = None
+        self._dir = directory
 
     @property
     def path(self) -> Path:
-        return index_dir() / self.dirname
+        return index_dir(self._dir) / self.dirname
 
     def exists(self) -> bool:
         return self.path.exists() and any(self.path.iterdir())
@@ -317,33 +325,35 @@ class QdrantStore:
 # --------------------------------------------------------------------------- #
 
 _BACKENDS = {"faiss": FaissStore, "qdrant": QdrantStore}
-_instance = None
+_instances: dict[tuple[str, str | None], object] = {}
 
 
-def get_store(backend: str | None = None):
-    """The configured store, built once per process."""
-    global _instance
+def get_store(backend: str | None = None, directory: str | None = None):
+    """The configured store, built once per (engine, directory).
+
+    Кэш стал по паре, а не одиночкой, когда поиск пошёл по нескольким индексам.
+    Для Qdrant это не оптимизация, а необходимость: локальный режим держит
+    блокировку каталога, и второй клиент на тот же каталог упал бы.
+    """
+    choice = ((backend if backend is not None else settings.vector_backend)
+              or "faiss").strip().lower()
+    if choice not in _BACKENDS:
+        raise RuntimeError(f"unknown VECTOR_BACKEND={choice!r}; "
+                           f"expected one of: {', '.join(_BACKENDS)}")
     if backend is not None:                    # explicit: used by migration
-        choice = backend.strip().lower()
-        if choice not in _BACKENDS:
-            raise RuntimeError(f"unknown VECTOR_BACKEND={choice!r}; "
-                               f"expected one of: {', '.join(_BACKENDS)}")
-        return _BACKENDS[choice]()
-    if _instance is None:
-        choice = (settings.vector_backend or "faiss").strip().lower()
-        if choice not in _BACKENDS:
-            raise RuntimeError(f"unknown VECTOR_BACKEND={choice!r}; "
-                               f"expected one of: {', '.join(_BACKENDS)}")
-        _instance = _BACKENDS[choice]()
-    return _instance
+        return _BACKENDS[choice](directory)
+    key = (choice, directory)
+    if key not in _instances:
+        _instances[key] = _BACKENDS[choice](directory)
+    return _instances[key]
 
 
 def reset() -> None:
-    """Forget the cached store — for tests and for migration, which needs both."""
-    global _instance
-    if _instance is not None and hasattr(_instance, "close"):
-        _instance.close()
-    _instance = None
+    """Forget the cached stores — for tests and for migration, which needs both."""
+    for store in _instances.values():
+        if hasattr(store, "close"):
+            store.close()
+    _instances.clear()
 
 
 def migrate(source: str, target: str) -> int:

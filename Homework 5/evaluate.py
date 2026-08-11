@@ -51,41 +51,52 @@ def rank_of_hit(sources: list[str], expect: list[str]) -> int | None:
     return None
 
 
-def ranked_ids(query: str, mode: str) -> list[int]:
-    """Номера чанков в порядке, который даёт указанная конфигурация."""
-    top_k = settings.retrieval_top_k
+def ranked_ids(query: str, mode: str) -> list[tuple[str, int]]:
+    """Кандидаты в порядке, который даёт указанная конфигурация.
 
-    semantic = retriever.semantic_search(query, top_k)
-    lexical = retriever.bm25_search(query, top_k)
+    Кандидат — пара (индекс, позиция), как и внутри retriever: поиск идёт по
+    всем настроенным индексам сразу, и замер обязан мерить то же, что работает
+    в агенте, а не его однобокий вариант.
+    """
+    top_k = settings.retrieval_top_k
+    semantic: list[tuple[str, int]] = []
+    lexical: list[tuple[str, int]] = []
+    per_index = []
+
+    for name in retriever.index_names():
+        near = [(name, i) for i in retriever.semantic_search(query, top_k, name=name)]
+        words = [(name, i) for i in retriever.bm25_search(query, top_k, name=name)]
+        semantic += near
+        lexical += words
+        per_index.append(retriever.reciprocal_rank_fusion([near, words]))
 
     if mode == "semantic":
         return semantic
     if mode == "bm25":
         return lexical
-    fused = retriever.reciprocal_rank_fusion([semantic, lexical])
+    fused = retriever.reciprocal_rank_fusion(per_index)
     if mode != "reranked":
         return fused
-    ranked, _ = retriever.rerank(query, fused[:max(top_k, TOP_N)], TOP_N)
-    return [i for i, _ in ranked]
+    ranked, _ = retriever.rerank(query, fused[:max(top_k * len(per_index), TOP_N)], TOP_N)
+    return [key for key, _ in ranked]
 
 
-def sources_for(order: list[int]) -> list[str]:
+def sources_for(order: list[tuple[str, int]]) -> list[str]:
     """Имена файлов без повторов.
 
     Дедупликация по файлу обязательна для документной метрики: три чанка одного
     документа — это один ответ, а не три. Иначе hit@3 мерил бы длину документа,
     а не качество поиска.
     """
-    chunks = retriever._load()["chunks"]
     out: list[str] = []
-    for i in order:
-        name = chunks[i]["source"]
+    for key in order:
+        name = retriever.chunk_at(key)["source"]
         if name not in out:
             out.append(name)
     return out
 
 
-def passage_rank(order: list[int], item: dict) -> int | None:
+def passage_rank(order: list[tuple[str, int]], item: dict) -> int | None:
     """Позиция первого пассажа, который СОДЕРЖИТ ответ.
 
     Пассаж засчитывается, когда он из ожидаемого документа И несёт строку-
@@ -93,9 +104,8 @@ def passage_rank(order: list[int], item: dict) -> int | None:
     41 чанке разных банковских выписок, и без имени файла метрика засчитала бы
     выписку чужой компании.
     """
-    chunks = retriever._load()["chunks"]
-    for position, i in enumerate(order[:TOP_N], start=1):
-        chunk = chunks[i]
+    for position, key in enumerate(order[:TOP_N], start=1):
+        chunk = retriever.chunk_at(key)
         if not any(n.lower() in chunk["source"].lower() for n in item["expect"]):
             continue
         if any(e.lower() in chunk["text"].lower() for e in item["evidence"]):
@@ -123,7 +133,7 @@ def main() -> None:
     by_passage: dict[str, list] = {mode: [] for mode in modes}
     misses: list[tuple] = []
 
-    print(f"{len(queries)} запросов, индекс {settings.index_dir}")
+    print(f"{len(queries)} запросов, индексы: {', '.join(retriever.index_names())}")
     print(f"из них с пассажной разметкой: {len(labelled)}\n")
     print("     док / пассаж                              запрос")
     for item in queries:

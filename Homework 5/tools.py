@@ -295,8 +295,16 @@ def knowledge_search(query: str, top_n: int = settings.rerank_top_n,
                  if r.get("date") else "")
         if r.get("mail_date") and r["mail_date"] != r.get("date"):
             dated += f", sent {r['mail_date']}"
+        # Письмо и документ цитируются по-разному, потому что «страница 2» у
+        # письма означает второе письмо в цепочке, а не вторую страницу.
+        if r.get("kind") == "mail":
+            head = f"[письмо: {r['source']} #{r['page']} в цепочке]"
+        else:
+            head = f"[{r['source']} p.{r['page']}]"
+            if r.get("kind") == "attachment":
+                head += " (вложение письма)"
         blocks.append(
-            f"\n{i}. [{r['source']} p.{r['page']}]{dated}{marker} "
+            f"\n{i}. {head}{dated}{marker} "
             f"score={r['score']} via {origin}\n"
             f"{_truncate(r['text'], settings.max_url_content_length)}")
     return header + "\n" + "\n".join(blocks)
