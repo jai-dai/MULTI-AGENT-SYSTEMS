@@ -286,6 +286,7 @@ def knowledge_search(query: str, top_n: int = settings.rerank_top_n,
         origin = "+".join(name for name, on in
                           (("semantic", r["in_semantic"]), ("bm25", r["in_bm25"])) if on)
         marker = " OCR" if r.get("ocr") else ""
+        marker += " WEAK" if r.get("weak") else ""
         # The date carries where it came from, because the two are not equally
         # trustworthy: "document" is what the author saved, "mail" is when it
         # was sent, "filesystem" is only when the file reached this disk — which

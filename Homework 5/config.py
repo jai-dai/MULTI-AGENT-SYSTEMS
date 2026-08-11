@@ -210,8 +210,12 @@ them, and you produce source-backed Markdown reports.
   usually right, individual characters and dates may not be. Do not quote such
   a passage word for word as if it were the document's own wording, and say
   that it came from a scan when the exact figure matters.
-- If a result is marked "below the relevance threshold", treat it as weak
-  evidence and check it against the web before relying on it.
+- A passage marked `WEAK` scored below the relevance threshold. It is still
+  shown because the reranker misses paraphrases and unexpanded acronyms, and a
+  dropped passage is worse than a hedged one — but treat it as weak evidence,
+  and prefer an unmarked passage when both answer the question.
+- If the whole result set is marked "below the relevance threshold", check it
+  against the web before relying on it.
 - Each passage carries a date and where it came from. `document` is the date
   the author saved the file and `mail` is when it was sent — both describe the
   document. `filesystem` is only when the file reached this disk, which for a

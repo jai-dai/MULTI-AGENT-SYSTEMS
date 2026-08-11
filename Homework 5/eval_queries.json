@@ -10,94 +10,181 @@
     "",
     "expect — подстроки имени файла (регистронезависимо). Достаточно одной.",
     "Запросы намеренно разноязычные и разной формы: точные термины, вопросы,",
-    "и запросы, где нужного слова в документе нет вовсе."
+    "и запросы, где нужного слова в документе нет вовсе.",
+    "",
+    "evidence — строка, которая должна встретиться В САМОМ пассаже, чтобы он",
+    "считался ответом. Есть не у всех запросов, и это осознанно: там, где",
+    "вопрос звучит как «найди этот документ», любая его страница — законный",
+    "ответ, и пассажная разметка была бы подделкой. Пассаж верен, когда он из",
+    "ожидаемого документа И содержит свидетельство: «Вхідний залишок» сам по",
+    "себе встречается в 41 чанке разных банковских выписок."
   ],
   "queries": [
     {
       "query": "хто підписав агентську угоду JJ Motors Ukraine",
-      "expect": ["Контракт Mottram"],
-      "note": "AGENT AGREEMENT No. 17, подписант Vladlen Levchuk"
+      "expect": [
+        "Контракт Mottram"
+      ],
+      "note": "AGENT AGREEMENT No. 17, подписант Vladlen Levchuk",
+      "evidence": [
+        "AGENT AGREEMENT"
+      ]
     },
     {
       "query": "advisory agreement Sokrat Financial Advisory номер угоди",
-      "expect": ["Ref_Agreement_SokratFA"],
-      "note": "ADVISORY AGREEMENT № 1A202401"
+      "expect": [
+        "Ref_Agreement_SokratFA"
+      ],
+      "note": "ADVISORY AGREEMENT № 1A202401",
+      "evidence": [
+        "1A202401"
+      ]
     },
     {
       "query": "виписка з банківського рахунку ТОВ Джей Джей Груп 2023 2025",
-      "expect": ["виписка JJ Group"],
-      "note": "сводная выписка, счёт UAH"
+      "expect": [
+        "виписка JJ Group"
+      ],
+      "note": "сводная выписка, счёт UAH",
+      "evidence": [
+        "Вхідний залишок"
+      ]
     },
     {
       "query": "реєстр проектів EDCF пріоритетність вартість бенефіціар",
-      "expect": ["Реєстр проектів EDCF"],
+      "expect": [
+        "Реєстр проектів EDCF"
+      ],
       "note": "xlsx с таблицей приоритетов"
     },
     {
       "query": "опитувальник юридичної особи резидента",
-      "expect": ["Опитувальник ЮО"],
+      "expect": [
+        "Опитувальник ЮО"
+      ],
       "note": "две версии одного документа"
     },
     {
       "query": "меморандум про співпрацю з Українською автомобільною корпорацією",
-      "expect": ["Мемо JJ + Ukrauto"],
-      "note": "ПрАТ УкрАвто + JJ motors"
+      "expect": [
+        "Мемо JJ + Ukrauto"
+      ],
+      "note": "ПрАТ УкрАвто + JJ motors",
+      "evidence": [
+        "автомобільна корпораці"
+      ]
     },
     {
       "query": "разработка модели обуви с нуля и адаптация существующих",
-      "expect": ["Разработка модели обуви"],
-      "note": "единственный документ про обувь"
+      "expect": [
+        "Разработка модели обуви"
+      ],
+      "note": "единственный документ про обувь",
+      "evidence": [
+        "с нуля"
+      ]
     },
     {
       "query": "dealership agreement SKON Tech Plus Korea",
-      "expect": ["SK~Argus Dealership"],
-      "note": "договор дилерства от 8 июля 2024"
+      "expect": [
+        "SK~Argus Dealership"
+      ],
+      "note": "договор дилерства от 8 июля 2024",
+      "evidence": [
+        "Dealership Agreement for Purchase",
+        "SKONTech"
+      ]
     },
     {
       "query": "ставка дисконтирования и NPV по пилотному проекту зарядок",
-      "expect": ["EVI ПИЛОТ"],
-      "note": "xlsx, ставка 0.1205"
+      "expect": [
+        "EVI ПИЛОТ"
+      ],
+      "note": "xlsx, ставка 0.1205",
+      "evidence": [
+        "0.1205"
+      ]
     },
     {
       "query": "огляд енергетики України Центр Разумкова USAID",
-      "expect": ["2024-06 енергетика огляд"],
+      "expect": [
+        "2024-06 енергетика огляд"
+      ],
       "note": "издание Центра Разумкова"
     },
     {
       "query": "proposal for EDCF loan energy storage backup critical infrastructure",
-      "expect": ["Compact Loan Request", "ESS EDCF bidding", "Draft pre-FS ESS"],
-      "note": "тема ESS+EDCF раскрыта в нескольких документах проекта"
+      "expect": [
+        "Compact Loan Request",
+        "ESS EDCF bidding",
+        "Draft pre-FS ESS"
+      ],
+      "note": "тема ESS+EDCF раскрыта в нескольких документах проекта",
+      "evidence": [
+        "Energy Storages"
+      ]
     },
     {
       "query": "play to earn MOBA game project cinematics",
-      "expect": ["KURUKSHETRA"],
-      "note": "единственный игровой проект в корпусе"
+      "expect": [
+        "KURUKSHETRA"
+      ],
+      "note": "единственный игровой проект в корпусе",
+      "evidence": [
+        "Play2Earn"
+      ]
     },
     {
       "query": "PRC semiconductors united front strategy",
-      "expect": ["PRC United Front"],
+      "expect": [
+        "PRC United Front"
+      ],
       "note": "англоязычный отчёт"
     },
     {
       "query": "Viva Mobility заснована 2018 під назвою JJ Motors",
-      "expect": ["Viva Corp deck"],
-      "note": "pdf и pptx — один и тот же дек"
+      "expect": [
+        "Viva Corp deck"
+      ],
+      "note": "pdf и pptx — один и тот же дек",
+      "evidence": [
+        "January2018",
+        "undername"
+      ]
     },
     {
       "query": "статут АТОН-ГРУП ідентифікаційний код товариства",
-      "expect": ["Статут Атон Груп", "Cтатут.pdf"],
-      "note": "две редакции устава в корпусе"
+      "expect": [
+        "Статут Атон Груп",
+        "Cтатут.pdf"
+      ],
+      "note": "две редакции устава в корпусе",
+      "evidence": [
+        "36146790"
+      ]
     },
     {
       "query": "хто засновник АТОН-ГРУП",
-      "expect": ["Рішення учасника АГ", "Структура власності АТОН-ГРУП",
-                 "Виписка АГ", "РІШЕННЯ АТОН-ГРУП продаж", "Статут Атон Груп"],
-      "note": "имя учредителя встречается в шести документах — все верны"
+      "expect": [
+        "Рішення учасника АГ",
+        "Структура власності АТОН-ГРУП",
+        "Виписка АГ",
+        "РІШЕННЯ АТОН-ГРУП продаж",
+        "Статут Атон Груп"
+      ],
+      "note": "имя учредителя встречается в шести документах — все верны",
+      "evidence": [
+        "Артазей"
+      ]
     },
     {
       "query": "програма візиту віцепрем'єр-міністра до Республіки Корея",
-      "expect": ["Програми візиту ВПМ", "Program VPM UA visit Korea",
-                 "VPM visit program Korea", "Програма візиту ВПМ"],
+      "expect": [
+        "Програми візиту ВПМ",
+        "Program VPM UA visit Korea",
+        "VPM visit program Korea",
+        "Програма візиту ВПМ"
+      ],
       "note": "черновики v2/v3 на двух языках"
     }
   ]

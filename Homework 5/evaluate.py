@@ -1,6 +1,15 @@
 """Замер поиска на размеченном наборе: `python evaluate.py`.
 
 Отвечает на вопрос, который иначе решается на глаз: **какая стадия что даёт**.
+
+Метрики две, и вторая появилась потому, что первая была несправедлива к
+реранкеру. Документная спрашивает «нашли ли нужный файл»; но реранкер выбирает
+не файл, а нужный кусок внутри него, и по документной метрике он не может
+показать ни выигрыша, ни проигрыша. Пассажная спрашивает «несёт ли выданный
+пассаж сам ответ» — там его работа наконец видна. Есть она не у всех запросов:
+где вопрос звучит как «найди этот документ», любая его страница законна, и
+размечать там пассажи было бы подделкой.
+
 Один и тот же набор прогоняется четырьмя конфигурациями —
 
     semantic          только вектора
@@ -42,26 +51,32 @@ def rank_of_hit(sources: list[str], expect: list[str]) -> int | None:
     return None
 
 
-def sources_for(query: str, mode: str) -> list[str]:
-    """Имена файлов в порядке, который даёт указанная конфигурация."""
-    chunks = retriever._load()["chunks"]
+def ranked_ids(query: str, mode: str) -> list[int]:
+    """Номера чанков в порядке, который даёт указанная конфигурация."""
     top_k = settings.retrieval_top_k
 
     semantic = retriever.semantic_search(query, top_k)
     lexical = retriever.bm25_search(query, top_k)
 
     if mode == "semantic":
-        order = semantic
-    elif mode == "bm25":
-        order = lexical
-    else:
-        order = retriever.reciprocal_rank_fusion([semantic, lexical])
-        if mode == "reranked":
-            ranked, _ = retriever.rerank(query, order[:max(top_k, TOP_N)], TOP_N)
-            order = [i for i, _ in ranked]
+        return semantic
+    if mode == "bm25":
+        return lexical
+    fused = retriever.reciprocal_rank_fusion([semantic, lexical])
+    if mode != "reranked":
+        return fused
+    ranked, _ = retriever.rerank(query, fused[:max(top_k, TOP_N)], TOP_N)
+    return [i for i, _ in ranked]
 
-    # Дедупликация по файлу: три чанка одного документа — это один ответ, а не
-    # три. Иначе hit@3 мерил бы длину документа, а не качество поиска.
+
+def sources_for(order: list[int]) -> list[str]:
+    """Имена файлов без повторов.
+
+    Дедупликация по файлу обязательна для документной метрики: три чанка одного
+    документа — это один ответ, а не три. Иначе hit@3 мерил бы длину документа,
+    а не качество поиска.
+    """
+    chunks = retriever._load()["chunks"]
     out: list[str] = []
     for i in order:
         name = chunks[i]["source"]
@@ -70,33 +85,69 @@ def sources_for(query: str, mode: str) -> list[str]:
     return out
 
 
+def passage_rank(order: list[int], item: dict) -> int | None:
+    """Позиция первого пассажа, который СОДЕРЖИТ ответ.
+
+    Пассаж засчитывается, когда он из ожидаемого документа И несёт строку-
+    свидетельство. Одного свидетельства мало: «Вхідний залишок» встречается в
+    41 чанке разных банковских выписок, и без имени файла метрика засчитала бы
+    выписку чужой компании.
+    """
+    chunks = retriever._load()["chunks"]
+    for position, i in enumerate(order[:TOP_N], start=1):
+        chunk = chunks[i]
+        if not any(n.lower() in chunk["source"].lower() for n in item["expect"]):
+            continue
+        if any(e.lower() in chunk["text"].lower() for e in item["evidence"]):
+            return position
+    return None
+
+
+def report(title: str, modes: list[str], rows: dict[str, list]) -> None:
+    print(f"\n{title}")
+    print(f"{'конфигурация':<12} {'hit@1':>6} {'hit@3':>6} {'MRR':>6}")
+    for mode in modes:
+        ranks = rows[mode]
+        total = len(ranks)
+        hit1 = sum(1 for rank in ranks if rank == 1)
+        hit3 = sum(1 for rank in ranks if rank)
+        mrr = sum(1 / rank for rank in ranks if rank) / (total or 1)
+        print(f"{mode:<12} {hit1:>3}/{total} {hit3:>3}/{total} {mrr:>6.3f}")
+
+
 def main() -> None:
     queries = load_queries()
+    labelled = [q for q in queries if q.get("evidence")]
     modes = ["semantic", "bm25", "fused", "reranked"]
-    results: dict[str, list] = {mode: [] for mode in modes}
+    by_document: dict[str, list] = {mode: [] for mode in modes}
+    by_passage: dict[str, list] = {mode: [] for mode in modes}
+    misses: list[tuple] = []
 
-    print(f"{len(queries)} запросов, индекс {settings.index_dir}\n")
+    print(f"{len(queries)} запросов, индекс {settings.index_dir}")
+    print(f"из них с пассажной разметкой: {len(labelled)}\n")
+    print("     док / пассаж                              запрос")
     for item in queries:
-        ranks = {}
+        marks = []
         for mode in modes:
-            found = sources_for(item["query"], mode)[:TOP_N]
-            rank = rank_of_hit(found, item["expect"])
-            ranks[mode] = rank
-            results[mode].append((item, rank, found))
-        flags = " ".join(
-            f"{mode[:4]}={ranks[mode] if ranks[mode] else '—'}" for mode in modes)
-        mark = "ok " if ranks["reranked"] == 1 else ("~  " if ranks["reranked"] else "MISS")
-        print(f"{mark} {flags}  | {item['query'][:52]}")
+            order = ranked_ids(item["query"], mode)
+            document = rank_of_hit(sources_for(order)[:TOP_N], item["expect"])
+            by_document[mode].append(document)
+            passage = None
+            if item.get("evidence"):
+                passage = passage_rank(order, item)
+                by_passage[mode].append(passage)
+            if mode == "reranked" and not document:
+                misses.append((item, sources_for(order)[:TOP_N]))
+            marks.append(f"{mode[:4]}={document or '—'}/{passage or '—'}"
+                         if item.get("evidence") else
+                         f"{mode[:4]}={document or '—'}")
+        print(f"  {' '.join(marks)}  | {item['query'][:44]}")
 
-    print(f"\n{'конфигурация':<12} {'hit@1':>6} {'hit@3':>6} {'MRR':>6}")
-    for mode in modes:
-        rows = results[mode]
-        hit1 = sum(1 for _, rank, _ in rows if rank == 1)
-        hit3 = sum(1 for _, rank, _ in rows if rank)
-        mrr = sum(1 / rank for _, rank, _ in rows if rank) / len(rows)
-        print(f"{mode:<12} {hit1:>3}/{len(rows)} {hit3:>3}/{len(rows)} {mrr:>6.3f}")
+    report(f"документная метрика ({len(queries)} запросов): нашли ли нужный ФАЙЛ",
+           modes, by_document)
+    report(f"пассажная метрика ({len(labelled)} запросов): несёт ли пассаж ОТВЕТ",
+           modes, by_passage)
 
-    misses = [(item, found) for item, rank, found in results["reranked"] if not rank]
     if misses:
         print("\nне найдено полным конвейером:")
         for item, found in misses:

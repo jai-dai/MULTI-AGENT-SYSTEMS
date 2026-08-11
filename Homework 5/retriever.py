@@ -266,17 +266,27 @@ def rerank(query: str, candidates: list[int],
            top_n: int) -> tuple[list[tuple[int, float]], bool]:
     """Score (query, passage) pairs with the cross-encoder.
 
-    Returns (ranked, confident); `confident` is False when nothing cleared the
-    threshold, and the caller keeps the passages but marks them weak.
+    Порог ПОМЕЧАЕТ слабые пассажи, но не выбрасывает их. Раньше выбрасывал: при
+    наличии хоть одного пассажа выше порога возвращались только такие. Замер на
+    размеченном наборе показал, чего это стоит — запрос про ставку
+    дисконтирования, xlsx с числами: шумовой чанк из голых чисел получил 0.2375
+    и прошёл порог 0.15, а пассаж с самим ответом получил 0.1298, второе место
+    по скору, и был отрезан. Ответ терялся не из-за ранжирования (оно было
+    верным), а из-за отсечения. После правки hit@3 по пассажам 12/12 вместо
+    11/12.
+
+    Это возвращает модуль к его собственному принципу, записанному в шапке:
+    молчаливая потеря хуже, чем оговорённый ответ. Пассаж ниже порога уходит
+    вызывающей стороне помеченным, и агент знает, что это слабое свидетельство.
+
+    Returns (ranked, confident); `confident` is False когда порог не взял никто.
     """
     state = _load()
     pairs = [(query, state["chunks"][i]["text"]) for i in candidates]
     scores = [float(s) for s in _reranker().predict(pairs)]
     ranked = sorted(zip(candidates, scores), key=lambda p: p[1], reverse=True)
-    strong = [p for p in ranked if p[1] >= rerank_threshold()]
-    if strong:
-        return strong[:top_n], True
-    return ranked[:top_n], False
+    confident = any(score >= rerank_threshold() for _, score in ranked)
+    return ranked[:top_n], confident
 
 
 # --------------------------------------------------------------------------- #
@@ -332,6 +342,7 @@ def retrieve(query: str, top_k: int = None, top_n: int = None,
                 "filter": source, "matched_files": len(sources or []),
                 "stages": {"semantic": 0, "bm25": 0, "fused": 0}}
 
+    floor = rerank_threshold() if settings.rerank_enabled else 0.0
     if settings.rerank_enabled:
         ranked, confident = rerank(query, fused[:max(top_k, top_n)], top_n)
     else:
@@ -346,6 +357,10 @@ def retrieve(query: str, top_k: int = None, top_n: int = None,
         "source": chunks[i]["source"],
         "page": chunks[i]["page"],
         "score": round(score, 4),
+        # Слабый пассаж теперь доезжает до агента, а не выбрасывается, — значит
+        # он обязан приехать с меткой. Иначе разница между «сильное
+        # свидетельство» и «лучшее из плохого» исчезает по дороге.
+        "weak": bool(settings.rerank_enabled and score < floor),
         "in_semantic": i in semantic,
         "in_bm25": i in lexical,
         # Without a date the model cannot tell a charter from 2020 apart from
