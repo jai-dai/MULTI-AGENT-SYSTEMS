@@ -36,18 +36,60 @@ python main.py
 
 ## Архітектура
 
+**Агент і його інструменти**
+
 ```
-main.py       REPL
-agent.py      власний ReAct-цикл (з homework-lesson-4; тепер без прив'язки до вендора)
-llm.py        єдине місце, де діалог стає запитом до провайдера (2 бекенди)
-tools.py      knowledge_search + web_search, read_url, write_report, list/read_report
-retriever.py  semantic + BM25 → RRF → cross-encoder rerank
-vectorstore.py єдине місце, де живуть вектори (FAISS | Qdrant)
-embeddings.py єдине місце, де текст стає вектором (3 бекенди)
-ocr.py        розпізнавання сканів (Vision / tesseract)
-ingest.py     документи → чанки → ембеддинги → FAISS (+ chunks.json для BM25)
-config.py     Settings + SYSTEM_PROMPT
-index/        index.faiss · chunks.json · manifest.json   (не комітиться)
+main.py         REPL: читає запит, друкує кроки циклу, зберігає діалог
+agent.py        власний ReAct-цикл (з homework-lesson-4; без прив'язки до вендора)
+llm.py          єдине місце, де діалог стає запитом до провайдера (2 бекенди)
+tools.py        сім інструментів: knowledge_search, list_mail, web_search,
+                read_url, write_report, list_reports, read_report
+config.py       Settings з .env плюс SYSTEM_PROMPT — усе, що агент знає про себе
+```
+
+**Пошук по документах**
+
+```
+ingest.py       документи → читання (pdf/docx/xlsx/pptx) → чанки → ембеддинги →
+                індекс; інкрементальний за хешем файла, плюс --clean і --relabel
+retriever.py    semantic + BM25 → RRF → cross-encoder rerank, по кількох індексах
+sparse.py       BM25 як розріджений вектор для Qdrant; тут же єдиний токенізатор
+embeddings.py   єдине місце, де текст стає вектором (3 бекенди)
+vectorstore.py  єдине місце, де живуть вектори (FAISS | Qdrant)
+ocr.py          розпізнавання сканів там, де текстового шару немає (Vision/tesseract)
+preflight.py    чи вистачить машині RAM і диска під обрану конфігурацію
+```
+
+**Пошта: парсер Gmail і препроцесор**
+
+```
+mailprep/imap_fetch.py   виїмка листів по IMAP у SQLite; інкрементально за last_uid,
+                         вкладення пишуться на диск для звичайного ingest.py
+mailprep/mbox_import.py  той самий вхід, але з вивантаження Google Takeout (.mbox)
+mailprep/store.py        локальна база листів: збереження, перелік, стан синхронізації
+mailprep/models.py       RawMessage, Address, Attachment — спільні типи конвеєра
+mailprep/clean.py        препроцесор: зрізає цитати, підписи, службові хвости
+mailprep/pipeline.py     листи → ланцюжки → чанки з шапкою «Тема / Від / Кому»
+mailprep/index.py        чанки пошти → ембеддинги → окремий індекс index_mail
+mailprep/attachments.py  зв'язок «файл вкладення → лист, яким він прийшов»
+mailprep/inspect_quality.py  звіт про якість чистки: що зрізало і скільки лишилось
+```
+
+**Важливість, замір, приватність**
+
+```
+importance.py   бал важливості листа за правилами з weights.yaml, з поясненням
+evaluate.py     прогін розміченого набору чотирма конфігураціями пошуку
+check_names.py  не дає особистим іменам поїхати в публічний репозиторій
+```
+
+**Дані на диску** (нічого з цього не комітиться)
+
+```
+index_vl/       документи + вкладення: chunks.json · manifest.json · qdrant/ · sparse_vocab.json
+index_mail/     тіла листів, окремим індексом
+mail/           mail.db (SQLite) і attachments/ — каталог на кожного листа
+weights.yaml    ваги контрагентів; у репозиторій їде лише weights.example.yaml
 ```
 
 
@@ -115,8 +157,15 @@ ANTHROPIC_API_KEY=sk-ant-...
 
 Тому питання «чи робить Ollama те саме, що e5» некоректне: Ollama — **середовище**,
 як і sentence-transformers, а e5 — **модель**, як і nomic-embed-text. Порівнювати
-треба Ollama з sentence-transformers, а e5 з nomic-embed-text. У цьому проєкті
-sentence-transformers запускає модель e5.
+треба Ollama з sentence-transformers, а e5 з nomic-embed-text.
+
+**Що використовується зараз.** Через цей проєкт пройшли всі середовища з таблиці
+— sentence-transformers з `e5-base`, OpenAI API з `text-embedding-3-small`,
+Ollama з `nomic-embed-text`, — і кожне лишилось робочим: перемикання йде однією
+змінною в `.env`, без правок коду. Але **обидва живі індекси зібрані Ollama з
+моделлю `bge-m3`**, встановленою локально, і саме ця пара стоїть у конфігурації
+за замовчуванням. Чому обрана вона, з цифрами по трьох ембеддерах на одному
+корпусі — [нижче](#три-ембеддери-на-одному-корпусі-що-змінюється-насправді).
 
 І окремо про сховище: **FAISS тексту не бачить взагалі**. Він отримує вектор і
 повертає номери рядків — текст дістається з `chunks.json` уже після. Перевірити
