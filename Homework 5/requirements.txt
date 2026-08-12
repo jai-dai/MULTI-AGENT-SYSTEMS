@@ -36,3 +36,6 @@ torch==2.2.2
 numpy==1.26.4
 scipy==1.13.1
 scikit-learn==1.5.2
+
+# Anthropic-бекенд у llm.py. Імпортується ліниво: на OpenAI не потрібен.
+anthropic==0.121.0
