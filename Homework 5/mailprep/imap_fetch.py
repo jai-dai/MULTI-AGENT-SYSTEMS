@@ -330,7 +330,8 @@ def resolve_folders(imap: imaplib.IMAP4_SSL, wanted: list[str]) -> list[str]:
 
 def fetch_folder(imap: imaplib.IMAP4_SSL, conn, folder: str,
                  since: str | None = None, gmail: bool = True,
-                 attachments_dir: Path | None = None, max_bytes: int = 0) -> dict:
+                 attachments_dir: Path | None = None, max_bytes: int = 0,
+                 backfill: bool = False) -> dict:
     status, data = imap.select(f'"{folder}"', readonly=True)
     if status != "OK":
         print(f"   ! папка недоступна, пропускаю: {folder}")
@@ -343,14 +344,23 @@ def fetch_folder(imap: imaplib.IMAP4_SSL, conn, folder: str,
               f"читаю {folder} заново")
         last_uid = 0
 
-    criteria = [f"UID {last_uid + 1}:*"]
+    # Обычный режим — только то, что пришло после прошлой синхронизации.
+    #
+    # Догрузка НАЗАД так не работает и молча: у старых писем UID МЕНЬШЕ
+    # сохранённого, они не попадают ни в `UID last+1:*`, ни под фильтр ниже,
+    # и `--since 2024-09-01` вернул бы «новых писем нет» на полном ящике.
+    # Поэтому отдельный флаг: он снимает нижнюю границу по UID и оставляет
+    # только дату. Повторно пришедшие письма отсеет `store.save` по
+    # message-id, а `highest` считается через max и назад не откатится.
+    criteria = [] if backfill else [f"UID {last_uid + 1}:*"]
     if since:
         # IMAP понимает только формат 01-Jan-2024.
         criteria.append(f'SINCE {datetime.strptime(since, "%Y-%m-%d").strftime("%d-%b-%Y")}')
-    status, data = imap.uid("SEARCH", None, *criteria)
+    status, data = imap.uid("SEARCH", None, *(criteria or ["ALL"]))
     uids = data[0].split() if status == "OK" and data and data[0] else []
     # `UID n:*` всегда возвращает хотя бы одно письмо, даже когда нового нет.
-    uids = [u for u in uids if int(u) > last_uid]
+    if not backfill:
+        uids = [u for u in uids if int(u) > last_uid]
     if not uids:
         print(f" = {folder}: новых писем нет")
         return {"folder": folder, "new": 0, "seen": 0}
@@ -387,7 +397,8 @@ def fetch_folder(imap: imaplib.IMAP4_SSL, conn, folder: str,
 
 def sync(host: str, user: str, password: str, folders: list[str],
          db_path: str, since: str | None = None,
-         attachments_dir: str | None = None, max_mb: int = 25) -> dict:
+         attachments_dir: str | None = None, max_mb: int = 25,
+         backfill: bool = False) -> dict:
     conn = store.connect(db_path)
     gmail = "gmail" in host.lower() or "google" in host.lower()
     print(f"IMAP {user}@{host} → {db_path}")
@@ -403,7 +414,7 @@ def sync(host: str, user: str, password: str, folders: list[str],
             result = fetch_folder(
                 imap, conn, folder, since, gmail,
                 attachments_dir=Path(attachments_dir) if attachments_dir else None,
-                max_bytes=max_mb * 1024 * 1024)
+                max_bytes=max_mb * 1024 * 1024, backfill=backfill)
             totals["new"] += result["new"]
             totals["seen"] += result["seen"]
     finally:
@@ -422,6 +433,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Выкачка почты по IMAP в SQLite.")
     parser.add_argument("--folders", help="через запятую; по умолчанию из .env")
     parser.add_argument("--since", help="только письма от этой даты, YYYY-MM-DD")
+    parser.add_argument("--backfill", action="store_true",
+                        help="догрузить СТАРЫЕ письма: снимает границу по UID, "
+                             "берёт всё от --since. Дубли отсеются по message-id")
     parser.add_argument("--stats", action="store_true", help="что уже в базе")
     parser.add_argument("--list-folders", action="store_true",
                         help="показать папки на сервере и их атрибуты")
@@ -456,7 +470,8 @@ def main() -> None:
                 settings.imap_password.get_secret_value(), folders,
                 settings.mail_db, args.since or (settings.imap_since or None),
                 attachments_dir=settings.mail_attachments_dir,
-                max_mb=settings.mail_attachment_max_mb)
+                max_mb=settings.mail_attachment_max_mb,
+                backfill=args.backfill)
     print(f"\nв базе: {info['messages']} писем, {info['threads']} цепочек, "
           f"{info['oldest']} — {info['newest']}")
 
