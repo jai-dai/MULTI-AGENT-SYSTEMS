@@ -73,6 +73,28 @@ index/        index.faiss · chunks.json · manifest.json   (не комітит
 | `MAX_ITERATIONS` | `10` | ліміт кроків ReAct-циклу |
 
 
+### Механіка зміни LLM ядра
+
+Агент не знає, хто йому відповідає. `agent.py` містить ReAct-цикл і більше
+нічого; усе, що стосується формату проводу, живе в `llm.py`. Це той самий
+розподіл, який уже зроблено для ембеддингів (`embeddings.py`) і OCR (`ocr.py`):
+вендор-специфічна частина — за одним інтерфейсом.
+
+| `LLM_BACKEND` | Протокол | Хто це |
+|---|---|---|
+| `openai` | `/v1/chat/completions` | OpenAI, а також DeepSeek, Ollama, vLLM, LM Studio, Groq, Together, OpenRouter, Mistral, xAI — через `CHAT_BASE_URL` |
+| `anthropic` | `/v1/messages` через офіційний SDK | Claude |
+| `auto` (типово) | виводиться з `MODEL_NAME` | назва на `claude*` → Anthropic, інакше OpenAI |
+
+Тому зміна провайдера — це правка `.env`, а не коду:
+
+```bash
+MODEL_NAME=claude-opus-5
+ANTHROPIC_API_KEY=sk-ant-...
+# .venv/bin/pip install anthropic   — пакет імпортується ліниво,
+#                                     на OpenAI він не потрібен
+```
+
 
 ### Шари конвеєра: що куди подається
 
@@ -894,29 +916,8 @@ ms-marco-MiniLM-L-6-v2   релевантна=10.5603  нерелевантна=
 `RERANK_MIN_SCORE`, заданий явно в `.env`, як і раніше має пріоритет —
 вимірювання це типова поведінка, а не заборона.
 
-## Джерело генерації — змінне
 
-Агент не знає, хто йому відповідає. `agent.py` містить ReAct-цикл і більше
-нічого; усе, що стосується формату проводу, живе в `llm.py`. Це той самий
-розподіл, який уже зроблено для ембеддингів (`embeddings.py`) і OCR (`ocr.py`):
-вендор-специфічна частина — за одним інтерфейсом.
-
-| `LLM_BACKEND` | Протокол | Хто це |
-|---|---|---|
-| `openai` | `/v1/chat/completions` | OpenAI, а також DeepSeek, Ollama, vLLM, LM Studio, Groq, Together, OpenRouter, Mistral, xAI — через `CHAT_BASE_URL` |
-| `anthropic` | `/v1/messages` через офіційний SDK | Claude |
-| `auto` (типово) | виводиться з `MODEL_NAME` | назва на `claude*` → Anthropic, інакше OpenAI |
-
-Тому зміна провайдера — це правка `.env`, а не коду:
-
-```bash
-MODEL_NAME=claude-opus-5
-ANTHROPIC_API_KEY=sk-ant-...
-# .venv/bin/pip install anthropic   — пакет імпортується ліниво,
-#                                     на OpenAI він не потрібен
-```
-
-### Що саме довелося перекладати
+### Що виконали для виносу в окремий файл заміни провайдера LLM 
 
 OpenAI-сумісні ендпоінти підключалися й раніше — самим лише `CHAT_BASE_URL`,
 бо це **той самий протокол**. Anthropic — інший, і різниця не косметична:
