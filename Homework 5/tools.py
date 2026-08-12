@@ -296,6 +296,9 @@ def knowledge_search(query: str, top_n: int = settings.rerank_top_n,
                           (("semantic", r["in_semantic"]), ("bm25", r["in_bm25"])) if on)
         marker = " OCR" if r.get("ocr") else ""
         marker += " WEAK" if r.get("weak") else ""
+        # Мова, якої реранкер не оцінює: пасаж лишається у видачі, але агент
+        # мусить знати, що його місце в списку — не оцінка релевантності.
+        note = f"\n  ⚠️  {r['language_note']}" if r.get("language_note") else ""
         # The date carries where it came from, because the two are not equally
         # trustworthy: "document" is what the author saved, "mail" is when it
         # was sent, "filesystem" is only when the file reached this disk — which
@@ -314,7 +317,7 @@ def knowledge_search(query: str, top_n: int = settings.rerank_top_n,
                 head += " (вложение письма)"
         blocks.append(
             f"\n{i}. {head}{dated}{marker} "
-            f"score={r['score']} via {origin}\n"
+            f"score={r['score']} via {origin}{note}\n"
             f"{_truncate(r['text'], settings.max_url_content_length)}")
     return header + "\n" + "\n".join(blocks)
 

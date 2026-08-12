@@ -138,6 +138,12 @@ _PROBE_PAIRS = [
 # real passages, high enough that pure noise does not pass.
 _NOISE_MARGIN = 0.15
 
+# Ниже этого весь пул считается НЕОЦЕНЁННЫМ, а не слабо оценённым. Величина
+# взята из замеренного разрыва, а не подобрана под метрику: слабое мнение на
+# этом корпусе живёт около 0.0099, полное молчание — около 0.0001, между ними
+# два порядка. Порог посередине не подгоняется ни к одному из наблюдений.
+_SILENCE_FLOOR = 0.0   # ВРЕМЕННО ВЫКЛЮЧЕН для изолированного замера перевода
+
 
 def rerank_threshold() -> float:
     """The relevance floor, measured for the configured reranker.
@@ -184,11 +190,17 @@ def resolve_sources(pattern: str, name: str | None = None) -> list[str]:
     store only ever receives exact values. That keeps the Qdrant filter free of
     a payload text index and keeps both backends fed by the same input.
     """
-    needle = pattern.strip().lower()
+    # NFC з обох боків. macOS зберігає імена файлів у РОЗКЛАДЕНОМУ вигляді
+    # (NFD), а рядок, який набрала людина, приходить складеним (NFC): корейське
+    # «위임장» у назві файла і те саме слово в запиті — різні послідовності
+    # байтів, і підрядок не збігається. Заміряно на цьому корпусі: пошук за
+    # іменем корейського файла давав нуль при тому, що файл є в індексі.
+    import unicodedata
+    needle = unicodedata.normalize("NFC", pattern.strip()).lower()
     if not needle:
         return []
     return sorted({c["source"] for c in _load(name)["chunks"]
-                   if needle in c["source"].lower()})
+                   if needle in unicodedata.normalize("NFC", c["source"]).lower()})
 
 
 def resolve_correspondent(pattern: str, name: str | None = None) -> dict[str, list[str]]:
@@ -279,6 +291,22 @@ def reciprocal_rank_fusion(rankings: list[list[int]], k: int = 60) -> list[int]:
     return sorted(fused, key=fused.get, reverse=True)
 
 
+def _query_for(query: str, passage: str) -> str:
+    """Запит тією ж абеткою, що й пасаж — інакше реранкер не має що оцінювати.
+
+    Переклад робиться ліниво і не більше одного разу на пару (запит, абетка):
+    у типовому пулі мова одна, і тоді не витрачається нічого. Невдалий переклад
+    повертає вихідний запит — пошук не має падати через додатковий крок.
+    """
+    if not settings.translate_for_rerank:
+        return query
+    import translate
+    target = translate.script_of(passage)
+    if target == translate.script_of(query):
+        return query
+    return translate.translate(query, target) or query
+
+
 def chunk_at(key: tuple[str, int]) -> dict:
     """Кандидат -> сам чанк. Кандидат это пара (индекс, позиция в нём).
 
@@ -309,10 +337,29 @@ def rerank(query: str, candidates: list[tuple[str, int]],
 
     Returns (ranked, confident); `confident` is False когда порог не взял никто.
     """
-    pairs = [(query, chunk_at(key)["text"]) for key in candidates]
+    texts = [chunk_at(key)["text"] for key in candidates]
+    pairs = [(_query_for(query, text), text) for text in texts]
     scores = [float(s) for s in _reranker().predict(pairs)]
+    confident = any(score >= rerank_threshold() for score in scores)
+
+    # Реранкер не просто слаб на этом запросе — у него НЕТ мнения: весь пул
+    # лежит на нуле, и сортировать по таким числам значит сортировать шум.
+    # Тогда сохраняется порядок слияния, за которым стоят два независимых
+    # сигнала вместо одного молчащего.
+    #
+    # Порог релевантности для этого НЕ ГОДИТСЯ, и это заміряно: если считать
+    # «ниже порога» за «нет мнения», набор теряет по три попадания на каждой
+    # метрике (24/27 -> 21/27 по документам, 15/22 -> 12/22 по пассажам).
+    # Скоры 0.0099 против 0.0019 оба ниже порога 0.15, но несут настоящий
+    # порядок. Настоящее молчание на два порядка ниже: на запросе «чому
+    # постачальник затримав відповідь по котлу» весь пул получил 0.0000-0.0001,
+    # потому что переписка английская, а вопрос украинский —
+    # bge-reranker-base не сопоставляет языки между собой. Тот же вопрос
+    # по-английски даёт нужным пассажам 0.8976 и 0.8604.
+    if max(scores, default=0.0) < _SILENCE_FLOOR:
+        return list(zip(candidates, scores))[:top_n], False
+
     ranked = sorted(zip(candidates, scores), key=lambda p: p[1], reverse=True)
-    confident = any(score >= rerank_threshold() for _, score in ranked)
     return ranked[:top_n], confident
 
 
@@ -496,6 +543,11 @@ def retrieve(query: str, top_k: int = None, top_n: int = None,
         # Recognised from an image, so the wording may carry OCR errors —
         # the reader has to know that before quoting it verbatim.
         "ocr": bool(chunk.get("ocr")),
+        # Мова пасажа доходить до агента, коли реранкер її не оцінює. Мовчазна
+        # видача корейської довіреності серед українських документів виглядає
+        # як звичайний результат, хоч порядок для неї не рахувався.
+        "language_note": __import__("translate").unsupported(
+            __import__("translate").script_of(chunk["text"])),
     } for key, score in ranked]
 
     return {"results": results, "confident": confident,

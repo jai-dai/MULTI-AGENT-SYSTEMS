@@ -102,7 +102,7 @@ def _context_header(thread: Thread, msg: CleanMessage, idx: int) -> str:
     Шапка, которая добавляется к тексту ПЕРЕД эмбеддингом.
 
     Зачем: изолированное письмо "да, согласны, 14 недель" бесполезно в поиске.
-    С шапкой "Тема: Membrane panels RFQ | От: ORL Power" оно находится.
+    С шапкой "Тема: Membrane panels RFQ | От: O** P***r" оно находится.
     Это ключевой приём для качества RAG по почте.
     """
     who = str(msg.sender) if msg.sender else "unknown"
