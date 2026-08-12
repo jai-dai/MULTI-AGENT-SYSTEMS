@@ -110,17 +110,27 @@ def translate(query: str, target: str) -> str | None:
     if key in _cache:
         return _cache[key]
 
-    try:
-        from llm import get_backend
-        reply = get_backend().complete(
-            [{"role": "user",
-              "content": _PROMPT.format(target=_TARGET_NAME[target], query=query)}],
-            None)
-        text = (reply.text or "").strip()
-    except Exception as exc:                 # мережа, ключ, ліміт — не наша біда
-        print(f"   ! переклад запиту не вдався: {type(exc).__name__}: {exc}")
-        text = ""
+    from llm import get_backend
+    prompt = _PROMPT.format(target=_TARGET_NAME[target], query=query)
 
+    # Обрив звʼязку — не відповідь моделі, і запамʼятовувати його як відповідь
+    # не можна. Це вже коштувало нам хибного висновку: один `APIConnectionError`
+    # посеред заміру лишив запит неперекладеним, реранкер віддав по ньому нулі,
+    # і в звіті це виглядало як «переклад не працює».
+    text = ""
+    for attempt in (1, 2):
+        try:
+            text = (get_backend().complete(
+                [{"role": "user", "content": prompt}], None).text or "").strip()
+            break
+        except Exception as exc:             # мережа, ключ, ліміт — не наша біда
+            print(f"   ! переклад запиту не вдався ({attempt}/2): "
+                  f"{type(exc).__name__}: {exc}")
+    else:
+        return None                          # без кешу: наступний виклик спробує знову
+
+    # А ось відповідь не тією абеткою — це вже рішення моделі, воно повториться,
+    # і його кешуємо разом з успіхом.
     result = text if text and script_of(text) == target else None
     _cache[key] = result
     return result
