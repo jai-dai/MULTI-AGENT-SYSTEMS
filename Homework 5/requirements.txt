@@ -1,0 +1,41 @@
+# Tested with Python 3.12. No LangChain: the agent loop is hand-written
+# (homework-lesson-4) and the retrieval stack is assembled directly.
+
+# agent + tools
+openai==2.48.0
+ddgs==9.14.4
+trafilatura==2.1.0
+pydantic==2.13.4
+pydantic-settings==2.14.2
+
+# ingestion + retrieval
+pypdf==6.14.2
+python-docx==1.1.2
+openpyxl==3.1.5
+python-pptx==1.0.2
+
+# OCR for scanned PDFs. pypdfium2 rasterises pages in-process (no poppler).
+# Vision needs only pyobjc and is macOS-only; pytesseract additionally needs
+# the `tesseract` binary, and is the path off macOS.
+pypdfium2==5.12.1
+pyobjc-framework-Vision==12.2.1; sys_platform == "darwin"
+pyobjc-framework-Quartz==12.2.1; sys_platform == "darwin"
+pytesseract==0.3.13
+faiss-cpu==1.15.0
+# Vector store, swappable with FAISS (VECTOR_BACKEND). Runs EMBEDDED in
+# local mode — no server, no Docker.
+qdrant-client==1.19.0
+rank-bm25==0.2.2
+sentence-transformers==3.3.1
+
+# Pinned as a set, not by preference — see README "Environment notes".
+# torch 2.2.2 is the last macOS x86_64 build; transformers >= 4.46 refuses it,
+# numpy >= 2 breaks torch 2.2.2, and scipy/scikit-learn must match numpy 1.x.
+transformers==4.44.2
+torch==2.2.2
+numpy==1.26.4
+scipy==1.13.1
+scikit-learn==1.5.2
+
+# Anthropic-бекенд у llm.py. Імпортується ліниво: на OpenAI не потрібен.
+anthropic==0.121.0
