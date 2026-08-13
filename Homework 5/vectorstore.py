@@ -165,19 +165,51 @@ class QdrantStore:
         self._QdrantClient = QdrantClient
         self._client = None
         self._dir = directory
+        self._url = (settings.qdrant_url or "").strip()
+
+    @property
+    def server(self) -> bool:
+        """Окремий процес Qdrant замість бібліотеки всередині нашого."""
+        return bool(self._url)
 
     @property
     def path(self) -> Path:
         return index_dir(self._dir) / self.dirname
 
+    @property
+    def collection(self) -> str:
+        """Ім'я колекції: у вбудованому режимі одне, на сервері — по індексу.
+
+        Ізоляція індексів мусить кудись переїхати. У вбудованому режимі її дає
+        КАТАЛОГ: кожен індекс — своя папка, і колекція всередині може зватись
+        однаково. На сервері каталогу немає, всі індекси в одному сховищі, і
+        єдине, що їх розділяє, — ім'я колекції. Залишити `knowledge` означало б
+        покласти пошту поверх документів при першому ж записі.
+        """
+        if not self.server:
+            return COLLECTION
+        return self._dir or settings.index_dir
+
     def exists(self) -> bool:
+        if self.server:
+            try:
+                return self._connect().collection_exists(self.collection)
+            except Exception:
+                return False
         return self.path.exists() and any(self.path.iterdir())
 
     def _connect(self):
-        # Local mode locks the directory: ingestion and the agent cannot hold it
-        # at the same time. They never do in this project — but a second process
-        # will fail loudly rather than corrupt anything.
+        # Вбудований режим тримає блокування каталогу: індексація і агент не
+        # можуть тримати його одночасно, і другий процес падає з помилкою.
+        # Сервер цю проблему знімає — доступ розводить він сам.
         if self._client is None:
+            if self.server:
+                key = (settings.qdrant_api_key.get_secret_value()
+                       if settings.qdrant_api_key else None)
+                self._client = self._QdrantClient(url=self._url, api_key=key,
+                                                  timeout=60)
+                atexit.register(self.close)
+                return self._client
             self.path.mkdir(parents=True, exist_ok=True)
             self._client = self._QdrantClient(path=str(self.path))
             # Closed here rather than left to __del__: the client's finaliser
@@ -196,14 +228,25 @@ class QdrantStore:
     def write(self, vectors: np.ndarray, chunks: list[dict],
               sparse: list[dict[int, float]] | None = None) -> None:
         models = self._models
-        # A write replaces the collection outright, matching how save_state()
-        # behaves today. Incremental upsert is the next step, not this one.
-        if self.path.exists():
-            self.close()
-            shutil.rmtree(self.path)
-        client = self._connect()
+        # Запись заменяет коллекцию целиком — так же, как ведёт себя
+        # `save_state()`. Дозапись без пересборки живёт в `append()`.
+        #
+        # Чистится это по-разному, и подменять одно другим нельзя: во
+        # встроенном режиме коллекция — это КАТАЛОГ на диске, и снести его
+        # можно только закрыв клиент. На сервере каталога у нас нет вообще, там
+        # есть API; `rmtree` по чужому пути в лучшем случае ничего не найдёт, в
+        # худшем удалит не то.
+        if self.server:
+            client = self._connect()
+            if client.collection_exists(self.collection):
+                client.delete_collection(self.collection)
+        else:
+            if self.path.exists():
+                self.close()
+                shutil.rmtree(self.path)
+            client = self._connect()
         client.create_collection(
-            COLLECTION,
+            self.collection,
             # Our vectors are already L2-normalised, so cosine and inner product
             # rank identically; cosine is stated explicitly so the collection
             # stays correct even if that ever stops being true.
@@ -220,7 +263,7 @@ class QdrantStore:
         batch = 512
         for start in range(0, len(chunks), batch):
             window = range(start, min(start + batch, len(chunks)))
-            client.upsert(COLLECTION, points=[
+            client.upsert(self.collection, points=[
                 models.PointStruct(
                     id=i,                       # position == id, see module docstring
                     vector=self._vector_of(vectors[i], sparse, i),
@@ -252,7 +295,7 @@ class QdrantStore:
         осознанно не используется — там `ingest.py` собирает словарь заново.
         """
         client = self._connect()
-        total = client.count(COLLECTION, exact=True).count
+        total = client.count(self.collection, exact=True).count
         if total != offset:
             raise RuntimeError(
                 f"в коллекции {total} точек, а чанков {offset} — рассинхрон, "
@@ -261,7 +304,7 @@ class QdrantStore:
         batch = 512
         for start in range(0, len(chunks), batch):
             window = range(start, min(start + batch, len(chunks)))
-            client.upsert(COLLECTION, points=[
+            client.upsert(self.collection, points=[
                 models.PointStruct(
                     id=offset + i,
                     vector=self._vector_of(vectors[i], sparse, i),
@@ -291,7 +334,7 @@ class QdrantStore:
 
     def open(self) -> int:
         client = self._connect()
-        return client.count(COLLECTION, exact=True).count
+        return client.count(self.collection, exact=True).count
 
     def search(self, vector: np.ndarray, top_k: int,
                where: dict[str, list] | None = None,
@@ -320,14 +363,14 @@ class QdrantStore:
             # обоих бэкендах: подходящие чанки уже вычислены вызывающей стороной.
             must.append(self._models.HasIdCondition(has_id=list(ids)))
         query_filter = self._models.Filter(must=must) if must else None
-        hits = client.query_points(COLLECTION, query=vector[0].tolist(),
+        hits = client.query_points(self.collection, query=vector[0].tolist(),
                                    limit=top_k, query_filter=query_filter,
                                    with_payload=False).points
         return [int(h.id) for h in hits]
 
     def has_sparse(self) -> bool:
         client = self._connect()
-        config = client.get_collection(COLLECTION).config.params
+        config = client.get_collection(self.collection).config.params
         return bool(getattr(config, "sparse_vectors", None))
 
     def search_sparse(self, terms: dict[int, float], top_k: int,
@@ -351,7 +394,7 @@ class QdrantStore:
             must.append(self._models.HasIdCondition(has_id=list(ids)))
         query_filter = self._models.Filter(must=must) if must else None
         hits = client.query_points(
-            COLLECTION,
+            self.collection,
             query=self._models.SparseVector(indices=list(terms),
                                             values=list(terms.values())),
             using=self.SPARSE_NAME, limit=top_k,
@@ -360,13 +403,13 @@ class QdrantStore:
 
     def all_vectors(self) -> np.ndarray | None:
         client = self._connect()
-        total = client.count(COLLECTION, exact=True).count
+        total = client.count(self.collection, exact=True).count
         if not total:
             return None
         out: dict[int, list[float]] = {}
         offset = None
         while True:
-            points, offset = client.scroll(COLLECTION, limit=1024, offset=offset,
+            points, offset = client.scroll(self.collection, limit=1024, offset=offset,
                                            with_vectors=True, with_payload=False)
             for point in points:
                 # С разреженным вектором рядом точка отдаёт словарь векторов, а

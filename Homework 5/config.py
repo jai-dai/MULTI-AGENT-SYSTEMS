@@ -136,6 +136,21 @@ class Settings(BaseSettings):
     # the reranker. Qdrant buys metadata filtering, incremental writes and
     # sparse vectors; it runs embedded here, no server and no Docker.
     vector_backend: str = "faiss"
+    # Адреса локального сервера Qdrant, напр. http://localhost:6333.
+    # Порожньо — вбудований режим, як було: бібліотека всередині процесу читає
+    # каталог індексу. Сервер це ТЕЖ локальний процес, просто окремий: дані
+    # лишаються на диску, назовні не йде нічого. Різниця в тому, що вбудований
+    # режим шукає повним перебором і не вміє ні HNSW, ні квантування, ні
+    # `on_disk` — вони там приймаються мовчки й не працюють (заміряно).
+    qdrant_url: str = ""
+    # Ключ, якщо сервер його вимагає. Локальному зазвичай не потрібен.
+    qdrant_api_key: SecretStr | None = None
+    # Команда підняти сервер, якщо він не відповідає. Порожньо — не піднімати,
+    # лише сказати про це. Процес запускається ВІДОКРЕМЛЕНИМ і переживає агента:
+    # на сховище ходить не тільки він, а й ingest.py та evaluate.py, і робити
+    # базу дочірнім процесом одного з клієнтів — значить гасити її при його
+    # виході й ділити порт при наступному запуску.
+    qdrant_start_cmd: str = ""
     chunk_size: int = 500
     chunk_overlap: int = 100
     # How many candidates each retriever contributes before fusion and rerank.

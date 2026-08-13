@@ -29,6 +29,7 @@ import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
+from pathlib import Path
 
 from config import settings
 
@@ -295,6 +296,68 @@ def loads_anything_locally() -> bool:
     return settings.embedding_backend == "local" or settings.rerank_enabled
 
 
+def check_qdrant_server() -> None:
+    """Если настроен сервер Qdrant — убедиться, что он поднят.
+
+    Без этой проверки не запущенный сервер выглядит как поломка поиска: агент
+    стартует нормально и падает лишь на первом `knowledge_search`, посреди
+    рассуждения, с сетевой ошибкой внутри стека qdrant_client. Причина — «забыл
+    запустить процесс», а вид у неё как у сломанного индекса.
+
+    Проверка не мешает работать без сервера: пустой QDRANT_URL означает
+    встроенный режим, и тогда проверять нечего.
+    """
+    url = (settings.qdrant_url or "").strip()
+    if not url:
+        return
+    if _qdrant_alive(url):
+        return
+
+    command = (settings.qdrant_start_cmd or "").strip()
+    if not command:
+        raise SystemExit(
+            f"⛔ QDRANT_URL={url}, но сервер не отвечает.\n"
+            "   Поднять его вручную, либо прописать QDRANT_START_CMD в .env, "
+            "чтобы он поднимался сам.\n"
+            "   Либо убрать QDRANT_URL — вернётся встроенный режим со старыми "
+            "каталогами index*/qdrant.")
+
+    import shlex
+    import subprocess
+    import time
+
+    print(f"   Qdrant не отвечает — поднимаю: {command}")
+    try:
+        # start_new_session отвязывает процесс от нашей группы: он переживёт
+        # выход агента, и следующий запуск застанет его уже поднятым. Вывод
+        # уходит в файл, иначе он лез бы в диалог поверх ответов агента.
+        log = open(Path(command).parent / "qdrant.log", "ab")
+        subprocess.Popen(shlex.split(command), stdout=log, stderr=log,
+                         start_new_session=True)
+    except OSError as exc:
+        raise SystemExit(f"⛔ не удалось запустить Qdrant ({exc}): {command}")
+
+    for _ in range(30):                       # серверу нужно несколько секунд
+        time.sleep(1)
+        if _qdrant_alive(url):
+            print("   Qdrant поднят")
+            return
+    raise SystemExit(
+        f"⛔ Qdrant запущен, но за 30 с так и не ответил на {url}. "
+        f"Смотрите {Path(command).parent / 'qdrant.log'}")
+
+
+def _qdrant_alive(url: str) -> bool:
+    import urllib.error
+    import urllib.request
+
+    try:
+        with urllib.request.urlopen(f"{url.rstrip('/')}/healthz", timeout=3):
+            return True
+    except (urllib.error.URLError, OSError):
+        return False
+
+
 def guard(*, interactive: bool = None, includes_reranker: bool = True) -> Report:
     """Assess, print, and decide whether to continue.
 
@@ -303,6 +366,8 @@ def guard(*, interactive: bool = None, includes_reranker: bool = True) -> Report
     """
     if os.environ.get("PREFLIGHT", "").strip().lower() in ("off", "0", "false"):
         return Report("ok", 0, 0, 0, 0, 0)
+
+    check_qdrant_server()
 
     if not loads_anything_locally():
         return Report("ok", 0, 0, 0, 0, 0)
