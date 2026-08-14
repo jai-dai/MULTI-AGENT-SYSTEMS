@@ -1,0 +1,22 @@
+# Зависимости, которых нет у Agent_1 — только протоколы hw9.
+#
+# Почему отдельный файл, а не строки в requirements.txt: тот приезжает из
+# Agent_1 через sync_from_agent1.sh и перезаписывается целиком. Дописанное туда
+# исчезло бы при первой же синхронизации, причём молча.
+#
+#   uv pip install -r requirements.txt -r requirements-protocols.txt
+
+# MCP. Официальный SDK, а не standalone fastmcp: 19 пакетов против 45, а класс
+# сервера тот же самый — в mcp 2.0 он зовётся MCPServer (mcp.server.mcpserver).
+mcp==2.0.0
+
+# cryptography 50.0.0 не имеет колеса под x86_64-darwin и лезет собираться через
+# Rust. Последняя с колесом — 48.0.1, поэтому потолок стоит явно.
+cryptography<49
+
+# ACP. Тянет FastAPI, OpenTelemetry и uvicorn — 37 пакетов.
+# ВНИМАНИЕ: uvicorn здесь не закреплён самим acp-sdk, а в uvicorn 0.52
+# `LoopSetupType` переименован в `LoopFactoryType`, из-за чего импорт
+# acp_sdk.server падает. Лечится не откатом uvicorn, а псевдонимом в
+# acp_compat.py — см. комментарий там.
+acp-sdk==1.0.3
