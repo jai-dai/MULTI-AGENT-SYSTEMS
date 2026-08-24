@@ -6,7 +6,7 @@
 
 ### Що змінюється порівняно з homework-8
 
-| Було (homework-lesson-8) | Стає (homework-lesson-10)                    |
+| Було (homework-lesson-8) | Стає (homework-lesson-11)                    |
 |-|----------------------------------------------|
 | Мультиагентна система без тестів | Та сама система + покриття тестами           |
 | Якість перевіряється вручну (vibe check) | Автоматизовані evals з метриками 0–1         |
@@ -150,7 +150,7 @@ correctness = GEval(
 ### Структура проєкту
 
 ```
-homework-lesson-10/
+homework-lesson-11/
 ├── tests/
 │   ├── golden_dataset.json       # 15-20 golden examples
 │   ├── test_planner.py           # Planner agent tests
