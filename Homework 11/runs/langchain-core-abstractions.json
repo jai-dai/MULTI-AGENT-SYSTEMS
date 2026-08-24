@@ -5,50 +5,49 @@
   "stages": {
     "planner": {
       "output": {
-        "goal": "Explain LangChain’s core abstractions and the purpose of each, focusing on the current (LCEL/Runnable-centric) architecture and mapping legacy terms where relevant.",
+        "goal": "Explain LangChain’s core abstractions (the main building blocks) and the purpose of each, reflecting current LangChain terminology (langchain-core/LCEL era).",
+        "blocked_reason": null,
         "search_queries": [
-          "LangChain core abstractions Runnable interface",
-          "LangChain LCEL core concepts prompt model output parser",
-          "langchain_core prompts messages ChatPromptTemplate BaseMessage",
-          "LangChain RunnableSequence RunnableParallel RunnableLambda what are they",
-          "LangChain retriever abstraction BaseRetriever Document",
-          "LangChain tools abstraction BaseTool Tool calling",
-          "LangChain agents vs LangGraph core abstractions",
-          "LangChain memory abstraction RunnableWithMessageHistory",
-          "LangChain vector store abstraction VectorStore VectorStoreRetriever",
-          "LangChain document loaders and text splitters core abstractions"
+          "site:python.langchain.com core abstractions",
+          "site:reference.langchain.com langchain-core interfaces chat models LLMs prompts output parsers runnables",
+          "LangChain Expression Language LCEL runnables what are they",
+          "LangChain retriever vs vector store abstraction",
+          "LangChain agent tool abstraction definition",
+          "LangChain memory abstraction status 2024 2025",
+          "LangChain chains vs runnables difference",
+          "LangChain document loaders text splitters document abstraction"
         ],
         "sources_to_check": [
           "web",
           "knowledge_base"
         ],
-        "output_format": "A two-column table listing each abstraction (grouped by category: orchestration, prompting/chat, model I/O, retrieval/knowledge, tool use/agency, state/memory) and a concise description of what it does, followed by a short ‘legacy vs current’ mapping section."
+        "output_format": "Markdown table with columns: Abstraction, What it represents, What it’s for, Typical inputs/outputs, Notes (e.g., deprecated/shifted concepts like Memory→Chat history, Chains→Runnables/LCEL)."
       },
       "tool_calls": [
         {
           "name": "web_search",
           "args": {
-            "query": "LangChain core abstractions Runnable LCEL prompt template output parser retriever tool agent memory",
+            "query": "LangChain core abstractions Chains Agents Tools Retrievers Memory Runnables LCEL",
             "max_results": 5
           },
-          "result": "Search results for 'LangChain core abstractions Runnable LCEL prompt template output parser retriever tool agent memory':\n\n1. langchain_core | LangChain Reference\n   URL: https://reference.langchain.com/python/langchain-core\n   Snippet: Retriever class returns Document objects given a text query. ... Utilities for getting information about the runtime environment. ... Prompt values for language model prompts. ... Global values and configuration that apply to all of LangChain. ... Store implements the key-value stores and storage helpers. ... Document loaders. ... Schema for Blobs and Blob Loaders. ... LangSmith document loader. .\n\n[TRUNCATED: showed first 400 of 458 characters]\n\n2. LangChain Guide (2026): Build LLM Apps in Python - Pynions\n   URL: https://pynions.com/langchain\n   Snippet: May 5, 2026 - ... LangChain is an open-source Python framework that gives you composable building blocks for LLM-powered applications: prompt templates, output parsers, chains, retrievers, memory, and agents.\n\n3. LangChain Complete Guide 2026: Build Production AI Applications with LCEL & LangGraph (119 Labs) | Gheware DevOps AI Blog\n   URL: https://devops.gheware.com/blog/posts/langchain-complete-guide-2026.html\n   Snippet: June 20, 2026 - Understanding this architecture ... into several key packages: langchain-core: Contains essential abstractions—LLMs, prompts, messages, and the Runnable interface....\n\n4. LangChain Tutorial: Build Your First LLM App (2026) | MyEngineeringPath\n   URL: https://myengineeringpath.dev/tools/langchain-tutorial/\n   Snippet: March 20, 2026 - Its core abstraction is LCEL (LangChain Expression Language) which lets you compose prompts, models, and output parsers using the pipe operator: prompt | llm | parser. ... LCEL (LangChain Expression Language) is LangChain's declarative syntax ...\n\n5. What is LangChain? Open-Source AI Framework Explained (2026)\n   URL: https://atlan.com/know/ai-agent/ai-agent-memory/what-is-langchain/\n   Snippet: May 26, 2026 - Permalink to “4. How does LangChain ... interfaces. The standard LCEL pattern chains retrieval and generation: retriever | prompt | model | output_parser....",
+          "result": "Search results for 'LangChain core abstractions Chains Agents Tools Retrievers Memory Runnables LCEL':\n\n1. langchain_core | LangChain Reference\n   URL: https://reference.langchain.com/python/langchain-core\n   Snippet: These abstractions are designed to be as modular and simple as possible. The benefit of having these abstractions is that any provider can implement the required interface and then easily be used in the rest of the LangChain ecosystem.\n\n2. langchain_core | LangChain Reference\n   URL: https://reference.langchain.com/python/langchain-core/langchain_core\n   Snippet: langchain-core defines the base abstractions for the LangChain ecosystem. The interfaces for core components like chat models, LLMs, vector stores, retrievers, and more are defined here. The universal invocation protocol (Runnables) along with a syntax for combining components are also defined here. No third-party integrations are defined here.\n\n3. LangChain Cheatsheet: The Complete Reference | Simeon Ivanov\n   URL: https://simeonivanov.dev/blog/langchain-cheatsheet\n   Snippet: Apr 10, 2026 · Every LangChain primitive — chains, prompts, memory, retrievers, agents, tools, and LCEL — with copy-paste examples in one scannable reference.\n\n4. Phase 1 – LangChain Core & LCEL - rahulkolekardev.github.io\n   URL: https://rahulkolekardev.github.io/langchain-langgraph-agentic-ebook/phase1.html\n   Snippet: Module 1 – LangChain Core Concepts & LCEL This module introduces the main building blocks in LangChain and how LCEL lets you connect them into pipelines using a simple, composable syntax.\n\n5. LangChain Cheatsheet: LCEL, Agents and RAG | DevShelfHub\n   URL: https://www.devshelfhub.com/cheatsheets/langchain/\n   Snippet: This cheatsheet covers the core imports, Chat and Embedding model wrappers, LCEL runnables, prompt templates, retrievers, agents, tools, LangGraph state, and full minimal RAG and agent examples.",
           "failed": false,
-          "seconds": 2.12
+          "seconds": 1.32
         },
         {
           "name": "knowledge_search",
           "args": {
-            "query": "LangChain core abstractions PromptTemplate LLMChain RunnableSequence retriever tool agent memory output parser",
+            "query": "LangChain core abstractions chains agents tools retrievers memory runnables LCEL",
             "top_n": 5
           },
-          "result": "5 passage(s) for 'LangChain core abstractions PromptTemplate LLMChain RunnableSequence retriever tool agent memory output parser' (semantic 10 + BM25 10 → 17 fused → reranked)\n\n1. [langchain.pdf p.1] score=0.5346 via semantic\n/langchain (https://github.com/langchain-ai/langchain)\nLangChain\nFree and open-source softwareportal LangChain is a software framework that helps facilitate the integration of large language models(LLMs) into applications. As a language model integration framework, LangChain's use-caseslargely overlap with those of language models in general, including document analysis andsummarization, chatbots, and code analysis.[2]\n\n2. [large-language-model.pdf p.8] WEAK score=0.1445 via semantic+bm25\ntems. Given a query, a document retriever is called to retrieve the most relevant documents. This is usually done by encoding the query and the documents into vectors, then finding the documents with\nvectors (usually stored in a vector database) most similar to the vector of the query. The LLM then\ngenerates an output based on both the query and context included from the retrieved documents.[66]\nTool use is a mechanism that enables LLMs to interact with external systems, applications, or data\nsources. It can allow for example to fetch real-time information from an API or to execute code. A\n\n3. [large-language-model.pdf p.8] WEAK score=0.0943 via semantic+bm25\nronments, recall past behaviors, and plan future actions. But it can be transformed into an agent by adding supporting elements: the role (profile) and the surrounding environment of an agent can be\nadditional inputs to the LLM, while memory can be integrated as a tool or provided as additional input.\nInstructions and input patterns are used to make the LLM plan actions and tool use is used to potentially\ncarry out these actions.[71]\nThe ReAct pattern, a portmanteau of reason and act, constructs an agent out of an LLM, using the LLM\n\n4. [langchain.pdf p.2] WEAK score=0.0898 via bm25\nueries https://python.langchain.com/docs/integrations/tools/graphql\nHuggingFace Hub No No Opensource Hugging Facemodels,datasets https://python.langchain.com/docs/integrations/tools/huggingface_tools\nHuman as a tool No No N/A Human input https://python.langchain.com/docs/integrations/tools/human_tools\nLangChain tools\n\n5. [langchain.pdf p.1] WEAK score=0.0894 via semantic\n-running, stateful AI agents.[9]\nIn April 2025, LangChain was featured in the Forbes AI 50 list.[10] LangChain's developers highlight the framework's applicability to use-cases including chatbots,[11] retrieval-augmented generation,[12] documentsummarization,[13] and synthetic data generation.[14] InfoWorld described LangChain as a software development kit that simplifies the connectionbetween large language models and external applications through a unified API.[15] The magazine also wrote that it can be used to bring in contextfrom sources such as PDFs, web pages, CSV files and relational",
+          "result": "5 passage(s) for 'LangChain core abstractions chains agents tools retrievers memory runnables LCEL' (semantic 10 + BM25 10 → 19 fused → reranked)\n\n1. [langchain.pdf p.1] score=0.5839 via bm25\n23 LangChain introduced LangServe, a deployment tool to host LCEL code as a production-ready API.[7] In February 2024 LangChain released LangSmith, a closed-source observability and evaluation platform for LLM applications, and announced a US$25 million Series A led by Sequoia Capital.[8] On 14 May 2025 the company launched LangGraph Platform into general availability, providingmanaged infrastructure for deploying long-running, stateful AI agents.[9]\nIn April 2025, LangChain was featured in the Forbes AI 50 list.[10]\n\n2. [langchain.pdf p.1] score=0.4868 via bm25\nure firm Sequoia Capital, a week after announcing a $10 million seed investmentfrom Benchmark.[3][4] In the third quarter of 2023, the LangChain Expression Language (LCEL) was introduced, whichprovides a declarative way to define chains of actions.[5][6]\nIn October 2023 LangChain introduced LangServe, a deployment tool to host LCEL code as a production-ready API.[7]\n\n3. [langchain.pdf p.1] WEAK score=0.1398 via semantic\n-running, stateful AI agents.[9]\nIn April 2025, LangChain was featured in the Forbes AI 50 list.[10] LangChain's developers highlight the framework's applicability to use-cases including chatbots,[11] retrieval-augmented generation,[12] documentsummarization,[13] and synthetic data generation.[14] InfoWorld described LangChain as a software development kit that simplifies the connectionbetween large language models and external applications through a unified API.[15] The magazine also wrote that it can be used to bring in contextfrom sources such as PDFs, web pages, CSV files and relational\n\n4. [langchain.pdf p.2] WEAK score=0.0748 via bm25\ny Text-to-imagegeneration https://python.langchain.com/docs/integrations/tools/dalle_image_generator DataForSEO No Yes Commercial SEO data,analytics https://python.langchain.com/docs/integrations/tools/dataforseo\nDuckDuckGoSearch No No Opensource Privacy-focused search https://python.langchain.com/docs/integrations/tools/ddg\nE2B DataAnalysis No No Opensource Data analysis https://python.langchain.com/docs/integrations/tools/e2b_data_analysis\nEden AI No Yes Commercial AI tools, APIs https://python.langchain.com/docs/integrations/tools/edenai_tools\n\n5. [langchain.pdf p.2] WEAK score=0.0455 via semantic+bm25\nueries https://python.langchain.com/docs/integrations/tools/graphql\nHuggingFace Hub No No Opensource Hugging Facemodels,datasets https://python.langchain.com/docs/integrations/tools/huggingface_tools\nHuman as a tool No No N/A Human input https://python.langchain.com/docs/integrations/tools/human_tools\nLangChain tools",
           "failed": false,
-          "seconds": 5.07
+          "seconds": 4.68
         }
       ],
-      "tokens": 2957,
+      "tokens": 4200,
       "steps": 3,
-      "captured_at": "2026-08-23T21:30:10+00:00",
+      "captured_at": "2026-08-24T05:54:46+00:00",
       "model": "gpt-5.2"
     },
     "researcher": {

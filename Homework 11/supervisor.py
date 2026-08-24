@@ -55,6 +55,20 @@ REPORT_MCP_URL = f"http://{settings.protocol_host}:{settings.report_mcp_port}/mc
 
 def render_plan(plan: ResearchPlan) -> str:
     """План — супервизору текстом: он передаёт его исследователю словами."""
+    if plan.blocked_reason:
+        return (f"GOAL: {plan.goal}\n"
+                f"BLOCKED — no research will run.\n"
+                f"REASON: {plan.blocked_reason}\n"
+                # «Answer the user directly» стояло здесь раньше и оказалось
+                # двусмысленным: супервизор понял это как «ответь на вопрос» и
+                # написал рецепт борща из собственных весов. Блокировка сняла
+                # ЦЕНУ (383 366 токенов → 3 696), но не поведение. Причина
+                # блокировки — это и ЕСТЬ ответ, а не повод сочинить свой.
+                "Relay that reason to the user in their own language, briefly, "
+                "and say what they could usefully ask instead. Do NOT answer the "
+                "original question yourself from your own knowledge: an answer "
+                "with nothing behind it is exactly what this system exists to "
+                "avoid. Do not save a report.")
     return (
         f"GOAL: {plan.goal}\n"
         f"SEARCH QUERIES:\n" + "\n".join(f"  - {q}" for q in plan.search_queries)
@@ -147,7 +161,33 @@ class Supervisor:
         self.plan = plan
         return render_plan(plan)
 
+    def _blocked(self) -> str | None:
+        """Причина, по которой исследовать нечего, либо None.
+
+        # Почему это проверяется кодом, а не остаётся промпту
+
+        Тот же довод, по которому лимит доработок живёт в счётчике: модель решает
+        ЧТО делать, код гарантирует СКОЛЬКО. Промпт с «не зови исследователя, план
+        заблокирован» соблюдается обычно, но не всегда, а цена нарушения здесь —
+        сотни тысяч токенов, ровно те, ради экономии которых ветка и заводилась.
+
+        Заблокировано делегирование, то есть дорогое. `save_report` намеренно НЕ
+        запрещён в коде: он стоит копейки, у него уже есть человек в контуре, и
+        запрещать запись там, где пользователь может её захотеть, — это чинить
+        не ту проблему.
+        """
+        if self.plan is not None and self.plan.blocked_reason:
+            return self.plan.blocked_reason
+        return None
+
     def _research(self, instructions: str) -> str:
+        reason = self._blocked()
+        if reason:
+            return ("The plan is blocked: there is nothing to research. "
+                    f"Reason: {reason}\n"
+                    "Answer the user directly and briefly — say what cannot be "
+                    "done and why, and offer the nearest thing you can do. Do "
+                    "not call research or critique again.")
         round_no = self.revisions + 1
         print(f"\n[Supervisor → ACP → Researcher]  (раунд {round_no})")
         # Исходный запрос передаётся каждый раз: за раундами доработок легко
@@ -157,6 +197,11 @@ class Supervisor:
         return reply.text
 
     def _critique(self, findings: str) -> str:
+        reason = self._blocked()
+        if reason:
+            return ("The plan is blocked, so no research happened and there is "
+                    f"nothing to critique. Reason: {reason}\n"
+                    "Answer the user directly and stop.")
         if self.revisions >= MAX_REVISIONS:
             # Лимит исчерпан — критиковать больше нет смысла: ещё один REVISE
             # некому исполнять.

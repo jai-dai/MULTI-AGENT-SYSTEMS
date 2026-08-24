@@ -5,67 +5,47 @@
   "stages": {
     "planner": {
       "output": {
-        "goal": "Explain what cross-encoder reranking is in retrieval (e.g., RAG/search) and provide guidance on whether to enable it when latency is critical, focusing on the accuracy–latency trade-off and practical mitigation options.",
+        "goal": "Explain what cross-encoder reranking is in retrieval (e.g., RAG/search) and give a practical recommendation on whether to enable it when end-to-end latency is critical.",
+        "blocked_reason": null,
         "search_queries": [
-          "cross-encoder reranking definition bi-encoder vs cross-encoder",
-          "retrieve then rerank cross-encoder CrossEncoder Sentence Transformers",
-          "Passage Re-ranking with BERT cross-encoder Nogueira Cho 2019",
-          "cross-encoder reranker latency trade-off top-k rerank candidates",
-          "BGE reranker latency benchmark ms per query",
-          "Cohere rerank latency throughput",
-          "ColBERT vs cross-encoder latency accuracy tradeoff reranking"
+          "cross-encoder reranker definition bi-encoder",
+          "cross-encoder reranking latency ms per query",
+          "bi-encoder vs cross-encoder reranking tradeoff accuracy latency",
+          "colBERT reranking latency accuracy tradeoff",
+          "late interaction reranker vs cross-encoder latency",
+          "how to reduce reranking latency top-k rerank distil cross-encoder"
         ],
         "sources_to_check": [
           "web",
           "knowledge_base"
         ],
-        "output_format": "Short explainer (2–3 paragraphs) plus a decision checklist table: 'Enable reranking?' with columns (Latency budget, Candidate count k, Hardware/serving, Expected quality gain, Recommended approach/alternatives)."
+        "output_format": "Short explanatory memo: (1) definition + how it works, (2) latency/throughput impact, (3) when to enable/disable, (4) low-latency alternatives and mitigations (top-k, smaller models, caching, two-stage reranking)."
       },
       "tool_calls": [
         {
           "name": "web_search",
           "args": {
-            "query": "cross-encoder reranking definition bi-encoder vs cross-encoder latency",
+            "query": "cross-encoder reranking what is it latency tradeoff",
             "max_results": 5
           },
-          "result": "Search results for 'cross-encoder reranking definition bi-encoder vs cross-encoder latency':\n\n1. What Is Reranking? Cross-Encoders vs Bi-Encoders Explained\n   URL: https://www.bestaiweb.ai/cross-encoders-bi-encoders-and-listwise-scoring-prerequisites-and-building-blocks-of-reranking/\n   Snippet: Apr 30, 2026 · Reranking reorders vector search candidates using heavier models. Cross-encoders, bi-encoders, and listwise scoring make different cost-accuracy trade-offs.\n\n2. Bi-Encoders vs Cross-Encoders — ZeroEntropy Blog\n   URL: https://www.zeroentropy.dev/articles/biencoder-vs-crossencoder/\n   Snippet: Mar 18, 2026 · The bi-encoder retrieves candidates in milliseconds; the cross-encoder rescores them in order of actual relevance. This is the retrieve-then-rerank pattern, and it is how virtually every serious search and RAG system works today.\n\n3. Cross-Encoder vs Bi-Encoder: What's the Difference? | AI/TLDR\n   URL: https://ai-tldr.dev/learn/rag/retrieval-and-reranking/cross-encoder-vs-bi-encoder/\n   Snippet: Jun 12, 2026 · Bi-encoders embed query and document separately; cross-encoders read them together. Learn why that difference makes rerankers accurate but slow to scale.\n\n4. Reranking: Cross-Encoders for Precise Information Retrieval\n   URL: https://mbrenndoerfer.com/writing/reranking-cross-encoders-information-retrieval\n   Snippet: Jan 30, 2026 · The primary constraint is latency: cross-encoders are orders of magnitude slower than bi-encoders due to their inability to precompute document representations.\n\n5. Reranking & Cross-Encoders for RAG: BGE, Cohere, Jina (2026 ...\n   URL: https://localaimaster.com/blog/reranking-cross-encoders-guide\n   Snippet: May 2, 2026 · The complete reranker guide for RAG. Bi-encoder vs cross-encoder vs ColBERT trade-offs. Models compared: BGE-Reranker-v2-m3, Cohere Rerank 3, Jina Reranker v2, mxbai-rerank, Voyage rerank-2. Setup, latency benchmarks, fine-tuning.",
-          "failed": false,
-          "seconds": 1.96
-        },
-        {
-          "name": "web_search",
-          "args": {
-            "query": "cross-encoder reranker latency tradeoff retrieval augmented generation",
-            "max_results": 5
-          },
-          "result": "ERROR: search failed (DDGSException: ConnectError: ConnectError('error sending request for url (https://yandex.com/search/site/?text=cross-encoder+reranker+latency+tradeoff+retrieval+augmented+generation&web=1&searchid=4755620) > client error (Connect) > dns error > DNS error: error response: Server Failure')). Try again with a different query.",
+          "result": "ERROR: search failed (DDGSException: ConnectError: ConnectError('error sending request for url (https://yandex.com/search/site/?text=cross-encoder+reranking+what+is+it+latency+tradeoff&web=1&searchid=2559582) > client error (Connect) > dns error > DNS error: error response: Server Failure')). Try again with a different query.",
           "failed": true,
-          "seconds": 3.28
+          "seconds": 3.81
         },
         {
           "name": "knowledge_search",
           "args": {
-            "query": "cross-encoder reranking",
+            "query": "cross-encoder reranking latency critical retriever reranker",
             "top_n": 5
           },
-          "result": "5 passage(s) for 'cross-encoder reranking' (semantic 10 + BM25 10 → 18 fused → reranked)\n\n1. [retrieval-augmented-generation.pdf p.3] score=0.4669 via semantic+bm25\nel’s\nlikelihood distribution. This involves retrieving the top-k vectors for a given prompt, scoring the generated response’s perplexity, and minimizing KL divergence between the retriever’s\nselections and the model’s likelihoods to refine retrieval.[12]\nReranking techniques can refine retriever performance by prioritizing the most relevant\nretrieved documents during training.[13]\nRetro language model for RAG. Each Retro block\nconsists of Attention, Chunked Cross Attention,\nand Feed Forward layers. Black-lettered boxes\nshow data being changed, and blue lettering\n\n2. [large-language-model.pdf p.10] WEAK score=0.0115 via bm25\nultimodal using the tokenization method, to allow image inputs,[94] and video inputs.[95] GPT-4o can process and generate text, audio and images.[96] Such models are sometimes called large multimodal\nmodels (LMMs).[97]\nA common method to create multimodal models out of an LLM is to \"tokenize\" the output of a trained\nencoder. Concretely, one can construct an LLM that can understand images as follows: take a trained\nLLM, and take a trained image encoder . Make a small multilayer perceptron , so that for any image\n\n3. [retrieval-augmented-generation.pdf p.3] WEAK score=0.0109 via semantic\nAttention,\nand Feed Forward layers. Black-lettered boxes\nshow data being changed, and blue lettering shows the algorithm performing the changes.\nBy redesigning the language model with the retriever in mind, a 25-time smaller network can get\ncomparable perplexity as its much larger counterparts.[14] Because it is trained from scratch, this method\n(Retro) incurs the high cost of training runs that the original RAG scheme avoided. The hypothesis is that\nby giving domain knowledge during training, Retro needs less focus on the domain and can devote its\n\n4. [retrieval-augmented-generation.pdf p.2] WEAK score=0.0033 via semantic+bm25\nus enhancements can improve\nthe way similarities are calculated in the vector stores (databases).[7] Process\nRAG key stages\nImprovements\nEncoder\n\n5. [large-language-model.pdf p.2] WEAK score=0.0023 via bm25\n017 NeurIPS conference, Google researchers\nintroduced the transformer architecture in their landmark paper \"Attention Is All You Need\".[20] This paper's goal was\nto improve upon 2014 seq2seq technology,[21] and was based\nmainly on the attention mechanism developed by Bahdanau et\nal. in 2014.[22] The following year in 2018, BERT was\nintroduced and quickly became \"ubiquitous\".[23] Though the\noriginal transformer has both encoder and decoder blocks,\nBERT is an encoder-only model. Academic and research\nusage of BERT began to decline in 2023, following rapid",
+          "result": "5 passage(s) for 'cross-encoder reranking latency critical retriever reranker' (semantic 10 + BM25 10 → 16 fused → reranked)\n\n1. [retrieval-augmented-generation.pdf p.3] score=0.6638 via semantic+bm25\nel’s\nlikelihood distribution. This involves retrieving the top-k vectors for a given prompt, scoring the generated response’s perplexity, and minimizing KL divergence between the retriever’s\nselections and the model’s likelihoods to refine retrieval.[12]\nReranking techniques can refine retriever performance by prioritizing the most relevant\nretrieved documents during training.[13]\nRetro language model for RAG. Each Retro block\nconsists of Attention, Chunked Cross Attention,\nand Feed Forward layers. Black-lettered boxes\nshow data being changed, and blue lettering\n\n2. [retrieval-augmented-generation.pdf p.3] WEAK score=0.1354 via semantic\nAttention,\nand Feed Forward layers. Black-lettered boxes\nshow data being changed, and blue lettering shows the algorithm performing the changes.\nBy redesigning the language model with the retriever in mind, a 25-time smaller network can get\ncomparable perplexity as its much larger counterparts.[14] Because it is trained from scratch, this method\n(Retro) incurs the high cost of training runs that the original RAG scheme avoided. The hypothesis is that\nby giving domain knowledge during training, Retro needs less focus on the domain and can devote its\n\n3. [large-language-model.pdf p.10] WEAK score=0.0851 via bm25\nultimodal using the tokenization method, to allow image inputs,[94] and video inputs.[95] GPT-4o can process and generate text, audio and images.[96] Such models are sometimes called large multimodal\nmodels (LMMs).[97]\nA common method to create multimodal models out of an LLM is to \"tokenize\" the output of a trained\nencoder. Concretely, one can construct an LLM that can understand images as follows: take a trained\nLLM, and take a trained image encoder . Make a small multilayer perceptron , so that for any image\n\n4. [retrieval-augmented-generation.pdf p.6] WEAK score=0.017 via semantic\n0.1145/3397271.340\n1075). Proceedings of the 43rd International ACM SIGIR Conference on Research and Development in Information Retrieval. pp. 39–48. doi:10.1145/3397271.3401075 (https://doi.\norg/10.1145%2F3397271.3401075). ISBN 978-1-4503-8016-4.\n10. Wang, Yup; Conroy, John M.; Molino, Neil; Yang, Julia; Green, Mike (2024). \"Laboratory for\nAnalytic Sciences in TREC 2024 Retrieval Augmented Generation Track\" (https://trec.nist.go\nv/pubs/trec33/index.html). NIST TREC 2024. Retrieved 15 March 2025.\n11. Lee, Kenton; Chang, Ming-Wei; Toutanova, Kristina (2019). \"\"Latent Retrieval for Weakly\n\n5. [retrieval-augmented-generation.pdf p.3] WEAK score=0.01 via semantic+bm25\nntations, such as SPLADE, with\nquery expansion strategies to improve search accuracy and recall.[10] These methods aim to enhance the quality of document retrieval in vector databases:\nPre-training the retriever using the Inverse Cloze Task (ICT), a technique that helps the\nmodel learn retrieval patterns by predicting masked text within documents.[11]\nSupervised retriever optimization aligns retrieval probabilities with the generator model’s\nlikelihood distribution. This involves retrieving the top-k vectors for a given prompt, scoring",
           "failed": false,
-          "seconds": 4.53
-        },
-        {
-          "name": "web_search",
-          "args": {
-            "query": "BERT cross-encoder reranking retrieve and rerank Nogueira Cho 2019 latency",
-            "max_results": 5
-          },
-          "result": "Search results for 'BERT cross-encoder reranking retrieve and rerank Nogueira Cho 2019 latency':\n\n1. [1901.04085] Passage Re-ranking with BERT - arXiv.orgRe-ranking | RAGPASSAGE RE RANKING WITH BERT - arXiv.orgReranking: Cross-Encoders, ColBERT, Cohere | Neel MishraRetrieve & Re-Rank — Sentence Transformers documentation(PDF) Passage Re-ranking with BERT - ResearchGateNogueira, R., & Cho, K. (2019) - Passage Re-Ranking With BERT ...\n   URL: https://arxiv.org/abs/1901.04085\n   Snippet: Jan 13, 2019 · In this paper, we describe a simple re-implementation of BERT for query-based passage re-ranking. Our system is the state of the art on the TREC-CAR dataset and the top entry in the leaderboard of the MS MARCO passage retrieval task, outperforming the previous state of the art by 27% (relative) in MRR@10. The two-stage pipeline: retrieve top-100 with bi-encoder, rerank to top-10 wit\n\n[TRUNCATED: showed first 400 of 2787 characters]\n\n2. PASSAGE RE RANKING WITH BERT - arXiv.org\n   URL: https://arxiv.org/pdf/1901.04085\n   Snippet: In this paper, we describe in detail how we have re-purposed BERT as a passage re-ranker and achieved state-of-the-art results on the MS MARCO passage re-ranking task.\n\n3. Reranking: Cross-Encoders, ColBERT, Cohere | Neel Mishra\n   URL: https://neelmishra.github.io/blog/mlops/rag/reranking.html\n   Snippet: Start with a small cross-encoder for development, benchmark latency on your hardware, and scale up to larger models or API-based solutions as quality requirements dictate.\n\n4. Retrieve & Re-Rank — Sentence Transformers documentation\n   URL: https://sbert.net/examples/sentence_transformer/applications/retrieve_rerank/README.html\n   Snippet: However, the retrieval system might retrieve documents that are not that relevant for the search query. Hence, in a second stage, we use a re-ranker based on a CrossEncoder that scores the relevancy of all candidates for the given search query.\n\n5. (PDF) Passage Re-ranking with BERT - ResearchGate\n   URL: https://www.researchgate.net/publication/360898655_Passage_Re-ranking_with_BERT\n   Snippet: Jan 10, 2019 · PDF | On Jan 10, 2019, Rodrigo Nogueira and others published Passage Re-ranking with BERT | Find, read and cite all the research you need on ResearchGate",
-          "failed": false,
-          "seconds": 2.41
+          "seconds": 5.07
         }
       ],
-      "tokens": 5906,
-      "steps": 5,
-      "captured_at": "2026-08-23T21:32:09+00:00",
+      "tokens": 3973,
+      "steps": 3,
+      "captured_at": "2026-08-24T05:56:56+00:00",
       "model": "gpt-5.2"
     },
     "e2e": {

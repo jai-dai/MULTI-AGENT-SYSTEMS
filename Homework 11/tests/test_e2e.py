@@ -101,6 +101,31 @@ def test_revision_limit_held(example):
 
 
 @pytest.mark.parametrize("example", examples(), ids=ids_of(examples()))
+def test_blocked_plan_stops_delegation(example):
+    """Заблокированный план обязан остановить дорогое — и остановить в КОДЕ.
+
+    Тот же довод, по которому лимит доработок живёт в счётчике: модель решает
+    ЧТО делать, код гарантирует СКОЛЬКО. Промпт «не зови исследователя»
+    соблюдается обычно, но не всегда, а цена нарушения тут — сотни тысяч
+    токенов, ровно те, ради которых ветка отказа и заводилась.
+    """
+    recorded = stage_or_skip(example["id"], "e2e")
+    plan = recorded.get("plan")
+    if not plan or not plan.get("blocked_reason"):
+        pytest.skip("план не заблокирован — проверять нечего")
+
+    delegated = [c["name"] for c in recorded["tool_calls"]
+                 if c["name"] in ("research", "critique") and not c["failed"]
+                 and not str(c["result"]).startswith("The plan is blocked")]
+    assert not delegated, (
+        f"план заблокирован ({plan['blocked_reason'][:80]}), но делегирование "
+        f"всё равно состоялось: {delegated}")
+    assert recorded["tokens"]["total"] < 100_000, (
+        f"заблокированный запрос стоил {recorded['tokens']['total']:,} токенов — "
+        f"смысл блокировки в том, чтобы он стоил копейки")
+
+
+@pytest.mark.parametrize("example", examples(), ids=ids_of(examples()))
 def test_run_produced_something(example):
     recorded = stage_or_skip(example["id"], "e2e")
     answer = recorded["report"] or recorded["output"]

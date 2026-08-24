@@ -212,6 +212,12 @@ def capture_researcher(example: dict, run: dict) -> dict:
     from schemas import ResearchPlan
 
     plan = ResearchPlan.model_validate(run["stages"]["planner"]["output"])
+    if plan.blocked_reason:
+        # Записывать стадию исследователя поверх заблокированного плана значило
+        # бы вручную делать ровно ту работу, которую блокировка отменяет.
+        raise RuntimeError(
+            f"план заблокирован ({plan.blocked_reason[:120]}) — исследовать "
+            "нечего, и стадия 'researcher' для этого примера не существует")
     # Формулировка ровно та же, что у супервизора: исходный запрос едет вместе с
     # планом каждый раунд, иначе исследователь уезжает в план и теряет человека.
     instructions = (f"ORIGINAL USER REQUEST: {example['input']}\n\n"

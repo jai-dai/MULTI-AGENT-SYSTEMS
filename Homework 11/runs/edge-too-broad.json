@@ -5,50 +5,55 @@
   "stages": {
     "planner": {
       "output": {
-        "goal": "Produce a comprehensive, structured overview of artificial intelligence (AI): definitions, major subfields, methods, history, applications, evaluation, risks/ethics, governance, and current trends.",
+        "goal": "Produce a structured, high-level but comprehensive overview of artificial intelligence (AI)—key definitions and subfields, major methods and model families, typical applications, evaluation, deployment stack, risks/ethics/safety, governance, and current open problems—aimed at a general technical audience.",
+        "blocked_reason": null,
         "search_queries": [
-          "artificial intelligence definition history symbolic AI vs machine learning",
-          "\"machine learning\" supervised unsupervised reinforcement learning overview",
-          "deep learning transformer architecture attention mechanism overview",
-          "natural language processing tasks language models retrieval augmented generation",
-          "computer vision convolutional neural networks object detection segmentation",
-          "AI evaluation metrics benchmark ML fairness robustness interpretability",
-          "AI risks alignment bias hallucinations adversarial examples model security",
-          "AI governance regulation EU AI Act NIST AI Risk Management Framework OECD AI principles",
-          "MLOps model lifecycle deployment monitoring data drift",
-          "generative AI diffusion models GANs prompt engineering"
+          "artificial intelligence definition history symbolic AI expert systems",
+          "AI vs machine learning vs deep learning vs generative AI definitions",
+          "supervised vs unsupervised vs self-supervised learning overview",
+          "reinforcement learning definition deep reinforcement learning examples",
+          "transformer architecture attention is all you need overview",
+          "large language model pretraining next-token prediction instruction tuning RLHF constitutional AI",
+          "computer vision convolutional neural networks vision transformers overview",
+          "AI evaluation benchmarks accuracy calibration hallucinations robustness",
+          "AI safety alignment interpretability mechanistic interpretability overview",
+          "AI ethics bias fairness transparency accountability privacy",
+          "AI governance regulation EU AI Act overview NIST AI Risk Management Framework",
+          "MLOps model deployment monitoring drift data lineage",
+          "AGI definition narrow AI general AI debates",
+          "AI environmental impact energy use training inference estimates"
         ],
         "sources_to_check": [
           "knowledge_base",
           "web"
         ],
-        "output_format": "A hierarchical outline with short sections (1–2 paragraphs each) plus two summary tables: (1) AI subfields/methods vs typical tasks & examples, (2) key risks vs mitigations & relevant standards/regulations; include a brief timeline of major AI milestones."
+        "output_format": "A sectioned brief with headings and a comparison table (AI vs ML vs DL vs GenAI; symbolic vs statistical; model families), plus a timeline of major milestones and a checklist-style summary of risks/mitigations."
       },
       "tool_calls": [
         {
           "name": "web_search",
           "args": {
-            "query": "artificial intelligence overview terminology machine learning deep learning NLP computer vision",
+            "query": "artificial intelligence overview terminology narrow vs general AI machine learning deep learning definition",
             "max_results": 5
           },
-          "result": "ERROR: search failed (DDGSException: ConnectError: ConnectError('error sending request for url (https://yandex.com/search/site/?text=artificial+intelligence+overview+terminology+machine+learning+deep+learning+NLP+computer+vision&web=1&searchid=7698454) > client error (Connect) > dns error > DNS error: error response: Server Failure')). Try again with a different query.",
-          "failed": true,
-          "seconds": 2.36
+          "result": "Search results for 'artificial intelligence overview terminology narrow vs general AI machine learning deep learning definition':\n\n1. AI vs. Machine Learning vs. Deep Learning vs. Neural Networks\n   URL: https://www.geeksforgeeks.org/machine-learning/ai-vs-machine-learning-vs-deep-learning-vs-neural-networks/\n   Snippet: Aug 6, 2025 · Artificial Intelligence (AI), Machine Learning (ML), Deep Learning (DL), and Neural Networks (NN) are terms often used interchangeably. However, they represent different layers of complexity and specialization in the field of intelligent systems.\n\n2. AI vs. Machine Learning vs. Deep Learning vs. Neural ... - IBM\n   URL: https://www.ibm.com/think/topics/ai-vs-machine-learning-vs-deep-learning-vs-neural-networks\n   Snippet: AI is the overarching system. Machine learning is a subset of AI. Deep learning is a subfield of machine learning, and neural networks make up the backbone of deep learning algorithms.\n\n3. Artificial Intelligence, Machine Learning, Deep Learning, and ...\n   URL: https://towardsdatascience.com/artificial-intelligence-machine-learning-deep-learning-and-generative-ai-clearly-explained/\n   Snippet: Dec 7, 2025 · Artificial Intelligence is everywhere. Machine Learning and Deep Learning are mentioned just as often. And now, Generative AI seems to dominate nearly every technology conversation. For many professionals outside the AI field, this vocabulary can be confusing.\n\n4. AI Overview and Definitions | Resource Library | Notre Dame ...\n   URL: https://learning.nd.edu/resource-library/ai-overview-and-definitions/\n   Snippet: As the field of AI continues to expand, the terminology and definitions used to describe it also continue to evolve. The three main categories of AI presented in this overview are artificial narrow intelligence, artificial general intelligence, and generative artificial intelligence.\n\n5. What is artificial intelligence, machine learning, and deep ...\n   URL: https://www.sciencedirect.com/science/chapter/edited-volume/pii/B9780443221323000022\n   Snippet: This chapter aims to introduce artificial intelligence (AI), machine learning (ML), and deep learning (DL), elucidating their distinctions and connections. Starting with fundamental definitions, this chapter outlines the differences among AI, ML, and DL.",
+          "failed": false,
+          "seconds": 2.03
         },
         {
           "name": "knowledge_search",
           "args": {
-            "query": "artificial intelligence overview",
+            "query": "artificial intelligence definition machine learning deep learning overview",
             "top_n": 5
           },
-          "result": "5 passage(s) for 'artificial intelligence overview' (semantic 10 + BM25 10 → 17 fused → reranked)\n\n1. [large-language-model.pdf p.34] score=0.387 via semantic+bm25\n. \"The A to Z of Artificial Intelligence\" (https://time.com/6271657/a-to-z-of-artificial-intelligenc e/). Time Magazine. 13 April 2023. Archived (https://web.archive.org/web/20230616123839/\nhttps://time.com/6271657/a-to-z-of-artificial-intelligence/) from the original on 16 June 2023.\nRetrieved 12 June 2023.\n131. Sekrst, Kristina (2025). The Illusion Engine: The Quest for Machine Consciousness.\nSpringer. ISBN 978-3-032-05561-3.\n132. Ji, Ziwei; Lee, Nayeon; Frieske, Rita; Yu, Tiezheng; Su, Dan; Xu, Yan; Ishii, Etsuko; Bang,\n\n2. [large-language-model.pdf p.25] WEAK score=0.0663 via semantic+bm25\n/2024/09/12/technology/openai-chatg\npt-math.html). The New York Times. Retrieved September 12, 2024. 29. \"Parameters in notable artificial intelligence systems\" (https://ourworldindata.org/grapher/arti\nficial-intelligence-parameter-count?time=2017-09-05..latest). ourworldindata.org. November\n30, 2023. Retrieved January 20, 2024.\n30. Sharma, Shubham (2025-01-20). \"Open-source DeepSeek-R1 uses pure reinforcement\nlearning to match OpenAI o1 — at 95% less cost\" (https://venturebeat.com/ai/open-source-d\neepseek-r1-uses-pure-reinforcement-learning-to-match-openai-o1-at-95-less-cost/).\n\n3. [large-language-model.pdf p.33] WEAK score=0.0645 via bm25\nigence-than-a-human-brain-says-futurist/)\nfrom the original on 12 June 2023. Retrieved 12 June 2023. 128. Newport, Cal (13 April 2023). \"What Kind of Mind Does ChatGPT Have?\" (https://www.newy\norker.com/science/annals-of-artificial-intelligence/what-kind-of-mind-does-chatgpt-have).\nThe New Yorker. Archived (https://web.archive.org/web/20230612071443/https://www.newy\norker.com/science/annals-of-artificial-intelligence/what-kind-of-mind-does-chatgpt-have)\nfrom the original on 12 June 2023. Retrieved 12 June 2023.\n\n4. [large-language-model.pdf p.22] WEAK score=0.0517 via bm25\np\nFoundation model\nGenerative artificial intelligence\nList of large language models\nList of chatbots Language model benchmark\nReinforcement learning\nMental health\nSentience\nSee also\n\n5. [langchain.pdf p.3] WEAK score=0.0407 via bm25\ng-round-generative-artificial-intelligence-startup-langchain-2023-4) from the original on 2023-04-18 g-round-generative-artificial-intelligence-startup-langchain-2023-4) from the original on 2023-04-18 Retrieved2023-04-18.",
+          "result": "5 passage(s) for 'artificial intelligence definition machine learning deep learning overview' (semantic 10 + BM25 10 → 17 fused → reranked)\n\n1. [large-language-model.pdf p.13] score=0.9974 via semantic\nuits\nwithin LLMs produce specific behaviors or outputs. By reverse-engineering model components at a granular level, researchers aim to detect and mitigate safety concerns such as emergent harmful\nbehaviors, biases, deception, or unintended goal pursuit before deployment. Mechanistic interpretability\nresearch has been conducted at organizations like Anthropic and OpenAI, although understanding the\ninner workings of LLMs remains difficult.\nThe reverse-engineering may lead to the discovery of algorithms that approximate inferences performed\n\n2. [large-language-model.pdf p.27] score=0.4945 via semantic+bm25\ni (2017).\n\"Deep reinforcement learning from human preferences\". arXiv:1706.03741 (https://arxiv.org/ abs/1706.03741) [stat.ML (https://arxiv.org/archive/stat.ML)].\n51. Edwards, Benj (2023-05-09). \"AI gains \"values\" with Anthropic's new Constitutional AI\nchatbot approach\" (https://arstechnica.com/information-technology/2023/05/ai-with-a-moral-\ncompass-anthropic-outlines-constitutional-ai-in-its-claude-chatbot/). Ars Technica. Retrieved\n2025-06-30.\n52. Snyder, Alison (2022-01-27). \"Next generation AI can follow a person's instructions and\n\n3. [large-language-model.pdf p.5] score=0.1979 via semantic\nters.\nBefore being fine-tuned, most LLMs are next-token predictors. The fine-tuning shapes the LLM's behavior via techniques like reinforcement learning from human feedback (RLHF)[50] or constitutional\nAI.[51]\nInstruction fine-tuning is a form of supervised learning used to teach LLMs to follow user instructions. In\n2022, OpenAI demonstrated InstructGPT, a version of GPT-3 similarly fine-tuned to follow\ninstructions.[52]\nReinforcement learning from human feedback (RLHF) involves training a reward model to predict which\n\n4. [large-language-model.pdf p.3] WEAK score=0.0435 via semantic\neployment.[39] Collectively, these studies highlight that open-weight LLMs can accelerate innovation and enhance scientific reproducibility, while fostering a more transparent and participatory AI ecosystem.\nAs machine learning algorithms process numbers rather than text, the text must be converted to numbers.\nIn the first step, a vocabulary is decided upon, then integer indices are arbitrarily but uniquely assigned to\neach vocabulary entry, and finally, an embedding is associated to the integer index. Algorithms include\n\n5. [langchain.pdf p.1] WEAK score=0.029 via bm25\nage models in general, including document analysis andsummarization, chatbots, and code analysis.[2] LangChain was launched in October 2022 as an open source project by Harrison Chase, whileworking at machine learning startup Robust Intelligence. In April 2023, LangChain hadincorporated and the new startup raised over $20 million in funding at a valuation of at least $200million from venture firm Sequoia Capital, a week after announcing a $10 million seed investmentfrom Benchmark.[3][4]",
           "failed": false,
-          "seconds": 4.08
+          "seconds": 4.66
         }
       ],
-      "tokens": 2561,
+      "tokens": 4335,
       "steps": 3,
-      "captured_at": "2026-08-23T21:31:38+00:00",
+      "captured_at": "2026-08-24T05:56:29+00:00",
       "model": "gpt-5.2"
     },
     "e2e": {

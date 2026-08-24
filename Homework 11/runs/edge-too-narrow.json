@@ -5,18 +5,19 @@
   "stages": {
     "planner": {
       "output": {
-        "goal": "Determine whether the Wikipedia article on retrieval-augmented generation specifies an exact recommended chunk size and token overlap, and if so extract the exact numbers and their context/citation.",
+        "goal": "Determine whether the Wikipedia article on retrieval-augmented generation specifies an exact recommended chunk size and overlap (in tokens), and if so, extract the exact values with a citation to the article revision.",
+        "blocked_reason": null,
         "search_queries": [
-          "site:en.wikipedia.org \"Retrieval-augmented generation\" chunk size overlap tokens",
-          "\"Retrieval-augmented generation\" Wikipedia \"chunk\" \"overlap\"",
+          "site:wikipedia.org \"Retrieval-augmented generation\" \"tokens\" \"overlap\"",
+          "\"Retrieval-augmented generation\" Wikipedia \"overlap\" \"chunk\"",
           "\"Retrieval-augmented generation\" \"Fixed length\" overlap Wikipedia",
-          "\"Retrieval-augmented generation\" \"chunk size\" \"overlap\" \"tokens\""
+          "wikipedia retrieval-augmented generation chunk size overlap tokens"
         ],
         "sources_to_check": [
-          "web",
-          "knowledge_base"
+          "knowledge_base",
+          "web"
         ],
-        "output_format": "Brief answer stating the exact recommended chunk size and overlap (in tokens) as quoted from Wikipedia, plus a one-line context note and the Wikipedia revision/oldid used."
+        "output_format": "Short answer with quoted sentence(s) from the Wikipedia article and the exact chunk size/overlap values (or a statement that no exact recommendation is given), plus the article URL/oldid as citation."
       },
       "tool_calls": [
         {
@@ -25,75 +26,65 @@
             "query": "Wikipedia \"retrieval-augmented generation\" chunk size overlap tokens",
             "max_results": 5
           },
-          "result": "ERROR: search failed (DDGSException: ConnectError: ConnectError('error sending request for url (https://yandex.com/search/site/?text=Wikipedia+%22retrieval-augmented+generation%22+chunk+size+overlap+tokens&web=1&searchid=4326897) > client error (Connect) > dns error > DNS error: error response: Server Failure')). Try again with a different query.",
-          "failed": true,
-          "seconds": 2.54
-        },
-        {
-          "name": "web_search",
-          "args": {
-            "query": "site:wikipedia.org retrieval-augmented generation chunk size overlap",
-            "max_results": 5
-          },
-          "result": "ERROR: search failed (DDGSException: ConnectError: ConnectError('error sending request for url (https://yandex.com/search/site/?text=site%3Awikipedia.org+retrieval-augmented+generation+chunk+size+overlap&web=1&searchid=4907724) > client error (Connect) > dns error > DNS error: error response: Server Failure')). Try again with a different query.",
-          "failed": true,
-          "seconds": 3.01
-        },
-        {
-          "name": "web_search",
-          "args": {
-            "query": "Retrieval-augmented generation Wikipedia chunk size overlap tokens recommendation",
-            "max_results": 5
-          },
-          "result": "Search results for 'Retrieval-augmented generation Wikipedia chunk size overlap tokens recommendation':\n\n1. Retrieval-augmented generation - Wikipedia\n   URL: https://en.wikipedia.org/wiki/Retrieval-augmented_generation\n   Snippet: Retrieval-augmented generation (RAG) enhances large language models (LLMs) by incorporating an information-retrieval mechanism that allows models to access and utilize additional data beyond their original training set.\n\n2. Chunk Size and Overlap: How to Pick Sane Defaults | AI/TLDR\n   URL: https://ai-tldr.dev/learn/rag/chunking-and-ingestion/chunk-size-and-overlap/\n   Snippet: Jun 12, 2026 · Too-small chunks lose context; too-big chunks bury the answer. Get practical defaults for chunk size and overlap, and learn how to tune them for your data.\n\n3. A Systematic Analysis of Chunking Strategies for Reliable ...\n   URL: https://arxiv.org/html/2601.14123v1\n   Snippet: Jan 20, 2026 · While practice often relies on heuristics, our end-to-end evaluation on Natural Questions systematically varies chunking method (token, sentence, semantic, code), chunk size, overlap, and context length. We use a standard industrial setup: SPLADE retrieval and a Mistral-8B generator.\n\n4. Chunking Strategies - GeeksforGeeks\n   URL: https://www.geeksforgeeks.org/artificial-intelligence/chunking-strategies/\n   Snippet: May 7, 2026 · Chunk overlap refers to the technique of including a small portion of text from the end of one chunk at the beginning of the next chunk. This helps maintain continuity between chunks and prevents important information from being lost when text is split.\n\n5. How to Choose Chunk Size and Overlap — The AI Database Blog\n   URL: https://theaidatabaseblog.com/learn/choose-chunk-size-and-overlap/\n   Snippet: Jun 4, 2026 · This guide explains how to choose chunk size and overlap for retrieval-augmented generation systems, vector search, and AI database workloads. It covers the tradeoff between precise small chunks and context-rich large chunks, when overlap helps or hurts, how different content types should be split, and how query style changes the right setting.",
+          "result": "Search results for 'Wikipedia \"retrieval-augmented generation\" chunk size overlap tokens':\n\n1. Retrieval-augmented generation - Wikipedia\n   URL: https://en.wikipedia.org/wiki/Retrieval-augmented_generation\n   Snippet: The term retrieval-augmented generation (RAG) was introduced in a 2020 paper that described combining a parametric language model with a non-parametric external memory accessed through retrieval at inference time.\n\n2. Enhance RAG performance through intelligent chunking strategies\n   URL: https://developer.ibm.com/articles/awb-enhancing-rag-performance-chunking-strategies/\n   Snippet: Feb 3, 2025 · Chunk size plays a crucial role in determining retrieval accuracy and system efficiency. Well-balanced chunking ensures relevant results in retrieval-augmented generation (RAG) systems.\n\n3. Chunking Strategies for RAG: Size, Overlap, and Metadata\n   URL: https://springdevpro.com/spring-ai/rag-chunking-strategies-size-overlap-metadata-spring-ai/\n   Snippet: A comprehensive guide to optimizing Retrieval-Augmented Generation performance through advanced chunking strategies. Learn how to balance token size, overlap windows, and metadata injection using Spring AI.\n\n4. RAG Chunk Size: Start With 512 Tokens, Then Test These ...\n   URL: https://krunalkanojiya.hashnode.dev/rag-chunk-size-practical-guide\n   Snippet: Jul 18, 2026 · For a new text-based RAG system, begin with structure-aware recursive splitting capped at 512 tokens. Use approximately 50 tokens of overlap only when natural boundaries are unreliable.\n\n5. Chunking Methods on Retrieval-Augmented Generation ...\n   URL: https://arxiv.org/html/2606.00881v1\n   Snippet: May 30, 2026 · To the best of our knowledge, this study is the first to systematically evaluate the effectiveness of a wide range of chunking methods and emphasize the underlying challenges of chunking strategies in RAG systems.",
           "failed": false,
-          "seconds": 2.06
+          "seconds": 2.31
         },
         {
           "name": "web_search",
           "args": {
-            "query": "\"retrieval-augmented generation\" \"chunk\" \"overlap\" site:en.wikipedia.org",
+            "query": "site:wikipedia.org \"retrieval-augmented generation\" \"chunk\" overlap tokens",
             "max_results": 5
           },
-          "result": "ERROR: search failed (DDGSException: ConnectError: ConnectError('error sending request for url (https://yandex.com/search/site/?text=%22retrieval-augmented+generation%22+%22chunk%22+%22overlap%22+site%3Aen.wikipedia.org&web=1&searchid=4371879) > client error (Connect) > dns error > DNS error: error response: Server Failure')). Try again with a different query.",
+          "result": "ERROR: search failed (DDGSException: ConnectError: ConnectError('error sending request for url (https://yandex.com/search/site/?text=site%3Awikipedia.org+%22retrieval-augmented+generation%22+%22chunk%22+overlap+tokens&web=1&searchid=5798649) > client error (Connect) > dns error > DNS error: error response: Server Failure')). Try again with a different query.",
           "failed": true,
-          "seconds": 2.69
+          "seconds": 3.28
         },
         {
           "name": "web_search",
           "args": {
-            "query": "en.wikipedia.org/wiki/Retrieval-augmented_generation \"overlap\" \"tokens\"",
+            "query": "\"Retrieval-augmented generation\" Wikipedia chunk size overlap",
             "max_results": 5
           },
-          "result": "ERROR: search failed (DDGSException: ConnectError: ConnectError('error sending request for url (https://yandex.com/search/site/?text=en.wikipedia.org%2Fwiki%2FRetrieval-augmented_generation+%22overlap%22+%22tokens%22&web=1&searchid=5766017) > client error (Connect) > dns error > DNS error: error response: Server Failure')). Try again with a different query.",
+          "result": "ERROR: search failed (DDGSException: ConnectError: ConnectError('error sending request for url (https://yandex.com/search/site/?text=%22Retrieval-augmented+generation%22+Wikipedia+chunk+size+overlap&web=1&searchid=6199300) > client error (Connect) > dns error > DNS error: error response: Server Failure')). Try again with a different query.",
           "failed": true,
-          "seconds": 3.07
+          "seconds": 3.33
         },
         {
           "name": "knowledge_search",
           "args": {
-            "query": "Retrieval-augmented generation chunk size overlap tokens Wikipedia",
+            "query": "Retrieval-augmented generation Wikipedia chunk size overlap tokens",
             "top_n": 5
           },
-          "result": "5 passage(s) for 'Retrieval-augmented generation chunk size overlap tokens Wikipedia' (semantic 10 + BM25 10 → 15 fused → reranked)\n\n1. [retrieval-augmented-generation.pdf p.6] score=0.2544 via semantic+bm25\n63–7786.\ndoi:10.18653/v1/2023.emnlp-main.482 (https://doi.org/10.18653%2Fv1%2F2023.emnlp-mai\nn.482). Retrieved from \"https://en.wikipedia.org/w/index.php?title=Retrieval-augmented_generation&oldid=1337298272\"\n\n2. [retrieval-augmented-generation.pdf p.1] WEAK score=0.0378 via semantic+bm25\nRetrieval-augmented generation\nRetrieval-augmented generation (RAG) is a technique that enables large language models (LLMs) to\nretrieve and incorporate new information from external data sources.[1] With RAG, LLMs first refer to a\nspecified set of documents, then respond to user queries. These documents supplement information from\nthe LLM's pre-existing training data.[2] This allows LLMs to use domain-specific and/or updated\n\n3. [retrieval-augmented-generation.pdf p.2] WEAK score=0.0055 via semantic+bm25\nOverview of RAG process, combining\nexternal documents and user input into\nan LLM prompt to get tailored output\nRetrieval-augmented generation (RAG) enhances large language models (LLMs) by incorporating an\ninformation-retrieval mechanism that allows models to access and utilize additional data beyond their\noriginal training set. Ars Technica notes that \"when new information becomes available, rather than\n\n4. [large-language-model.pdf p.8] WEAK score=0.005 via bm25\nsimilarly follow user instructions. Before the stream of User and Assistant lines, a chat context usually\nstarts with a few lines of overarching instructions, from a role called \"developer\" or \"system\" to convey a\nhigher authority than the user's input. This is called a \"system prompt\".\nRetrieval-augmented generation (RAG) is an approach that integrates LLMs with document retrieval\nsystems. Given a query, a document retriever is called to retrieve the most relevant documents. This is\n\n5. [retrieval-augmented-generation.pdf p.5] WEAK score=0.0042 via semantic+bm25\nve.[2]\n1. \"What is retrieval-augmented generation?\" (https://research.ibm.com/blog/retrieval-augment ed-generation-RAG). IBM. 22 August 2023. Retrieved 7 March 2025.\n2. \"Why Google's AI Overviews gets things wrong\" (https://www.technologyreview.com/2024/0\n5/31/1093019/why-are-googles-ai-overviews-results-so-bad/). MIT Technology Review. 31\nMay 2024. Retrieved 7 March 2025.\n3. Lewis, Patrick; Perez, Ethan; Piktus, Aleksandra; Petroni, Fabio; Karpukhin, Vladimir; Goyal,\nNaman; Küttler, Heinrich; Lewis, Mike; Yih, Wen-tau; Rocktäschel, Tim; Riedel, Sebastian;",
+          "result": "5 passage(s) for 'Retrieval-augmented generation Wikipedia chunk size overlap tokens' (semantic 10 + BM25 10 → 17 fused → reranked)\nNOTE: every passage scored BELOW the relevance threshold. The reranker may simply have missed the wording (it does not expand acronyms). Treat these as weak evidence and verify.\n\n1. [retrieval-augmented-generation.pdf p.6] WEAK score=0.1468 via semantic+bm25\n63–7786.\ndoi:10.18653/v1/2023.emnlp-main.482 (https://doi.org/10.18653%2Fv1%2F2023.emnlp-mai\nn.482). Retrieved from \"https://en.wikipedia.org/w/index.php?title=Retrieval-augmented_generation&oldid=1337298272\"\n\n2. [retrieval-augmented-generation.pdf p.1] WEAK score=0.0897 via semantic+bm25\nRetrieval-augmented generation\nRetrieval-augmented generation (RAG) is a technique that enables large language models (LLMs) to\nretrieve and incorporate new information from external data sources.[1] With RAG, LLMs first refer to a\nspecified set of documents, then respond to user queries. These documents supplement information from\nthe LLM's pre-existing training data.[2] This allows LLMs to use domain-specific and/or updated\n\n3. [retrieval-augmented-generation.pdf p.2] WEAK score=0.0292 via semantic\nrepresentations in the form of a large\nvector space. RAG can be used on unstructured (usually text), semi-structured, or structured data (for example knowledge\ngraphs). These embeddings are then stored in a vector\ndatabase to allow for document retrieval.\nGiven a user query, a document retriever is first called to\nselect the most relevant documents that will be used to\naugment the query.[2][3] This comparison can be done using a\nvariety of methods, which depend in part on the type of\nindexing used.[1]\nThe model feeds this relevant retrieved information into the\n\n4. [large-language-model.pdf p.8] WEAK score=0.0102 via bm25\nsimilarly follow user instructions. Before the stream of User and Assistant lines, a chat context usually\nstarts with a few lines of overarching instructions, from a role called \"developer\" or \"system\" to convey a\nhigher authority than the user's input. This is called a \"system prompt\".\nRetrieval-augmented generation (RAG) is an approach that integrates LLMs with document retrieval\nsystems. Given a query, a document retriever is called to retrieve the most relevant documents. This is\n\n5. [retrieval-augmented-generation.pdf p.2] WEAK score=0.0097 via bm25\nOverview of RAG process, combining\nexternal documents and user input into\nan LLM prompt to get tailored output\nRetrieval-augmented generation (RAG) enhances large language models (LLMs) by incorporating an\ninformation-retrieval mechanism that allows models to access and utilize additional data beyond their\noriginal training set. Ars Technica notes that \"when new information becomes available, rather than",
           "failed": false,
-          "seconds": 4.19
+          "seconds": 4.35
         },
         {
           "name": "knowledge_search",
           "args": {
-            "query": "chunk size overlap tokens",
+            "query": "\"chunk\" \"overlap\" \"tokens\" \"Retrieval-augmented generation\"",
+            "top_n": 5
+          },
+          "result": "5 passage(s) for '\"chunk\" \"overlap\" \"tokens\" \"Retrieval-augmented generation\"' (semantic 10 + BM25 10 → 15 fused → reranked)\n\n1. [retrieval-augmented-generation.pdf p.1] score=0.6608 via semantic+bm25\nRetrieval-augmented generation\nRetrieval-augmented generation (RAG) is a technique that enables large language models (LLMs) to\nretrieve and incorporate new information from external data sources.[1] With RAG, LLMs first refer to a\nspecified set of documents, then respond to user queries. These documents supplement information from\nthe LLM's pre-existing training data.[2] This allows LLMs to use domain-specific and/or updated\n\n2. [large-language-model.pdf p.8] score=0.3481 via bm25\nsimilarly follow user instructions. Before the stream of User and Assistant lines, a chat context usually\nstarts with a few lines of overarching instructions, from a role called \"developer\" or \"system\" to convey a\nhigher authority than the user's input. This is called a \"system prompt\".\nRetrieval-augmented generation (RAG) is an approach that integrates LLMs with document retrieval\nsystems. Given a query, a document retriever is called to retrieve the most relevant documents. This is\n\n3. [retrieval-augmented-generation.pdf p.2] WEAK score=0.1153 via semantic+bm25\nOverview of RAG process, combining\nexternal documents and user input into\nan LLM prompt to get tailored output\nRetrieval-augmented generation (RAG) enhances large language models (LLMs) by incorporating an\ninformation-retrieval mechanism that allows models to access and utilize additional data beyond their\noriginal training set. Ars Technica notes that \"when new information becomes available, rather than\n\n4. [retrieval-augmented-generation.pdf p.6] WEAK score=0.0737 via semantic\n63–7786.\ndoi:10.18653/v1/2023.emnlp-main.482 (https://doi.org/10.18653%2Fv1%2F2023.emnlp-mai\nn.482). Retrieved from \"https://en.wikipedia.org/w/index.php?title=Retrieval-augmented_generation&oldid=1337298272\"\n\n5. [retrieval-augmented-generation.pdf p.5] WEAK score=0.0468 via semantic+bm25\nve.[2]\n1. \"What is retrieval-augmented generation?\" (https://research.ibm.com/blog/retrieval-augment ed-generation-RAG). IBM. 22 August 2023. Retrieved 7 March 2025.\n2. \"Why Google's AI Overviews gets things wrong\" (https://www.technologyreview.com/2024/0\n5/31/1093019/why-are-googles-ai-overviews-results-so-bad/). MIT Technology Review. 31\nMay 2024. Retrieved 7 March 2025.\n3. Lewis, Patrick; Perez, Ethan; Piktus, Aleksandra; Petroni, Fabio; Karpukhin, Vladimir; Goyal,\nNaman; Küttler, Heinrich; Lewis, Mike; Yih, Wen-tau; Rocktäschel, Tim; Riedel, Sebastian;",
+          "failed": false,
+          "seconds": 4.78
+        },
+        {
+          "name": "knowledge_search",
+          "args": {
+            "query": "chunk size  overlap  tokens",
             "top_n": 5,
             "source": "retrieval-augmented-generation.pdf"
           },
-          "result": "5 passage(s) for 'chunk size overlap tokens' (semantic 10 + BM25 2 → 10 fused → reranked)\nNOTE: every passage scored BELOW the relevance threshold. The reranker may simply have missed the wording (it does not expand acronyms). Treat these as weak evidence and verify.\n\n1. [retrieval-augmented-generation.pdf p.4] WEAK score=0.1196 via semantic+bm25\ns have patterns that correct chunking can take advantage of.\nThree types of chunking strategies are: Fixed length with overlap. This is fast and easy. Overlapping consecutive chunks helps to\nmaintain semantic context across chunks.\nSyntax-based chunks can break the document up into sentences. Libraries such as spaCy\nor NLTK can also help.\nFile format-based chunking. Certain file types have natural chunks built in, and it's best to\nrespect them. For example, code files are best chunked and vectorized as whole functions\n\n2. [retrieval-augmented-generation.pdf p.6] WEAK score=0.0013 via semantic+bm25\ndels\" (https://a\nclanthology.org/2023.tacl-1.75/). Transactions of the Association for Computational Linguistics. 11: 1316–1331. arXiv:2302.00083 (https://arxiv.org/abs/2302.00083).\ndoi:10.1162/tacl_a_00605 (https://doi.org/10.1162%2Ftacl_a_00605). Retrieved 16 March\n2025.\n14. Borgeaud, Sebastian; Mensch, Arthur (2021). \"Improving language models by retrieving\nfrom trillions of tokens\" (https://proceedings.mlr.press/v162/borgeaud22a/borgeaud22a.pdf)\n(PDF).\n15. Wang, Boxin; Ping, Wei; Xu, Peng; McAfee, Lawrence; Liu, Zihan; Shoeybi, Mohammad;\n\n3. [retrieval-augmented-generation.pdf p.4] WEAK score=0.0007 via semantic\nt's best to\nrespect them. For example, code files are best chunked and vectorized as whole functions or classes. HTML files should leave <table> or base64 encoded <img> elements intact.\nSimilar considerations should be taken for pdf files. Libraries such as Unstructured or\nLangchain can assist with this method.\nSometimes vector database searches can miss key facts needed to answer a user's question. One way to\nmitigate this is to do a traditional text search, add those results to the text chunks linked to the retrieved\n\n4. [retrieval-augmented-generation.pdf p.3] WEAK score=0.0004 via semantic\nAttention,\nand Feed Forward layers. Black-lettered boxes\nshow data being changed, and blue lettering shows the algorithm performing the changes.\nBy redesigning the language model with the retriever in mind, a 25-time smaller network can get\ncomparable perplexity as its much larger counterparts.[14] Because it is trained from scratch, this method\n(Retro) incurs the high cost of training runs that the original RAG scheme avoided. The hypothesis is that\nby giving domain knowledge during training, Retro needs less focus on the domain and can devote its\n\n5. [retrieval-augmented-generation.pdf p.4] WEAK score=0.0003 via semantic\nIt has been reported that Retro is not reproducible, so modifications were made to make it so. The more\nreproducible version is called Retro++ and includes in-context RAG.[15]\nChunking involves various strategies for breaking up the data into vectors so the retriever can find details\nin it.\nDifferent data styles have patterns that correct chunking can take advantage of.\nThree types of chunking strategies are:",
+          "result": "5 passage(s) for 'chunk size  overlap  tokens' (semantic 10 + BM25 2 → 10 fused → reranked)\nNOTE: every passage scored BELOW the relevance threshold. The reranker may simply have missed the wording (it does not expand acronyms). Treat these as weak evidence and verify.\n\n1. [retrieval-augmented-generation.pdf p.4] WEAK score=0.1196 via semantic+bm25\ns have patterns that correct chunking can take advantage of.\nThree types of chunking strategies are: Fixed length with overlap. This is fast and easy. Overlapping consecutive chunks helps to\nmaintain semantic context across chunks.\nSyntax-based chunks can break the document up into sentences. Libraries such as spaCy\nor NLTK can also help.\nFile format-based chunking. Certain file types have natural chunks built in, and it's best to\nrespect them. For example, code files are best chunked and vectorized as whole functions\n\n2. [retrieval-augmented-generation.pdf p.6] WEAK score=0.0013 via semantic+bm25\ndels\" (https://a\nclanthology.org/2023.tacl-1.75/). Transactions of the Association for Computational Linguistics. 11: 1316–1331. arXiv:2302.00083 (https://arxiv.org/abs/2302.00083).\ndoi:10.1162/tacl_a_00605 (https://doi.org/10.1162%2Ftacl_a_00605). Retrieved 16 March\n2025.\n14. Borgeaud, Sebastian; Mensch, Arthur (2021). \"Improving language models by retrieving\nfrom trillions of tokens\" (https://proceedings.mlr.press/v162/borgeaud22a/borgeaud22a.pdf)\n(PDF).\n15. Wang, Boxin; Ping, Wei; Xu, Peng; McAfee, Lawrence; Liu, Zihan; Shoeybi, Mohammad;\n\n3. [retrieval-augmented-generation.pdf p.4] WEAK score=0.0007 via semantic\nt's best to\nrespect them. For example, code files are best chunked and vectorized as whole functions or classes. HTML files should leave <table> or base64 encoded <img> elements intact.\nSimilar considerations should be taken for pdf files. Libraries such as Unstructured or\nLangchain can assist with this method.\nSometimes vector database searches can miss key facts needed to answer a user's question. One way to\nmitigate this is to do a traditional text search, add those results to the text chunks linked to the retrieved\n\n4. [retrieval-augmented-generation.pdf p.3] WEAK score=0.0004 via semantic\nAttention,\nand Feed Forward layers. Black-lettered boxes\nshow data being changed, and blue lettering shows the algorithm performing the changes.\nBy redesigning the language model with the retriever in mind, a 25-time smaller network can get\ncomparable perplexity as its much larger counterparts.[14] Because it is trained from scratch, this method\n(Retro) incurs the high cost of training runs that the original RAG scheme avoided. The hypothesis is that\nby giving domain knowledge during training, Retro needs less focus on the domain and can devote its\n\n5. [retrieval-augmented-generation.pdf p.4] WEAK score=0.0003 via semantic\nIt has been reported that Retro is not reproducible, so modifications were made to make it so. The more\nreproducible version is called Retro++ and includes in-context RAG.[15]\nChunking involves various strategies for breaking up the data into vectors so the retriever can find details\nin it.\nDifferent data styles have patterns that correct chunking can take advantage of.\nThree types of chunking strategies are:",
           "failed": false,
-          "seconds": 4.39
+          "seconds": 4.85
         }
       ],
-      "tokens": 11410,
-      "steps": 8,
-      "captured_at": "2026-08-23T21:31:26+00:00",
+      "tokens": 16668,
+      "steps": 7,
+      "captured_at": "2026-08-24T05:56:14+00:00",
       "model": "gpt-5.2"
     },
     "e2e": {

@@ -41,21 +41,46 @@ def test_plan_is_valid_structure(example):
     plan = ResearchPlan.model_validate(recorded["output"])
 
     assert plan.goal.strip(), "goal пустой"
-    assert plan.output_format.strip(), "output_format пустой"
     assert all(q.strip() for q in plan.search_queries), "есть пустой запрос"
-    # Непустой список запросов требуется НЕ везде. На «why» или на бессмыслицу
-    # план без единого поиска — это правильный план: искать нечего. Требовать
-    # запросов здесь значило бы тестом ЗАСТАВЛЯТЬ систему делать лишнюю работу
-    # на 950 тысяч токенов.
-    if example["category"] != "failure_cases":
-        assert plan.search_queries, (
-            "search_queries пуст — исследователю не с чем идти")
 
     known = {"knowledge_base", "web"}
     unknown = [s for s in plan.sources_to_check if s not in known]
     assert not unknown, (
         f"названы источники, которых у системы нет: {unknown}. "
         f"Исследователь пойдёт искать несуществующий инструмент.")
+
+    # Ровно одно из двух, и половинчатого состояния быть не должно. Инвариант
+    # держит валидатор в `schemas.py`, здесь он проверяется на ЗАПИСИ: схема
+    # гарантирует его в момент создания, а тест — что на диске лежит то же
+    # самое и что валидатор не обошли стороной.
+    if plan.blocked_reason:
+        assert not plan.search_queries, (
+            "план заблокирован, но запросы всё равно составлены — "
+            "исследователь пойдёт их выполнять")
+    else:
+        assert plan.search_queries, "search_queries пуст, а план не заблокирован"
+        assert plan.output_format.strip(), "output_format пустой"
+
+
+@pytest.mark.parametrize("example", UNANSWERABLE, ids=ids_of(UNANSWERABLE))
+def test_plan_blocks_unanswerable_requests(example):
+    """На запрос, который нельзя исследовать, план обязан быть ЗАБЛОКИРОВАН.
+
+    Раньше это проверял только судья метрикой `Honest Refusal`, и проверял
+    плохо: балл 0.0 говорил «плохо себя вёл», но не говорил ЧТО именно сломано.
+    Теперь у плана есть ветка отказа, и для очевидных случаев вопрос стал
+    двоичным — значит и проверка двоичная, кодом и бесплатно.
+
+    Метрика при этом остаётся: она судит КАЧЕСТВО отказа — сказано ли внятно,
+    что не так, и предложено ли осмысленное «а вот это могу». Здесь же
+    проверяется сам факт, и это разные вопросы.
+    """
+    recorded = stage_or_skip(example["id"], "planner")
+    plan = ResearchPlan.model_validate(recorded["output"])
+    assert plan.blocked_reason, (
+        f"план не заблокирован на запросе, который нельзя исследовать. "
+        f"goal={plan.goal!r}, запросов: {len(plan.search_queries)}. "
+        f"Дальше по конвейеру пойдёт исследователь их выполнять.")
 
 
 @pytest.mark.parametrize("example", HAPPY, ids=ids_of(HAPPY))

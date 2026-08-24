@@ -5,50 +5,47 @@
   "stages": {
     "planner": {
       "output": {
-        "goal": "Explain the mechanisms by which retrieval-augmented generation (RAG) reduces hallucinations in large language models, and delineate the categories of hallucination that RAG does not resolve (or can even introduce).",
+        "goal": "Explain the mechanisms by which retrieval-augmented generation (RAG) tends to reduce hallucinations in LLM outputs, and delineate the types/causes of hallucination that RAG does not address (or can even worsen).",
+        "blocked_reason": null,
         "search_queries": [
-          "retrieval-augmented generation reduce hallucination grounding mechanism",
-          "RAG factuality hallucination mitigation evidence grounding",
-          "intrinsic vs extrinsic hallucination taxonomy RAG",
-          "attribution errors in RAG hallucination",
-          "retrieval errors causing hallucination in RAG irrelevant outdated documents",
-          "RAG citation hallucination fabricated sources",
-          "limitations of RAG for reasoning hallucinations logical errors",
-          "RAG does not fix instruction-following hallucinations or tool misuse",
-          "survey hallucination in large language models intrinsic extrinsic",
-          "\"Hallucination Mitigation\" \"Retrieval-Augmented\" review"
+          "retrieval-augmented generation reduces hallucination grounding citations mechanism",
+          "RAG hallucination unfaithful to retrieved context generation errors",
+          "types of LLM hallucination intrinsic extrinsic context-conflict RAG",
+          "RAG retrieval errors cause hallucinations missing evidence wrong documents",
+          "attribution faithfulness hallucination in retrieval augmented generation survey",
+          "knowledge grounded generation hallucination not solved by retrieval"
         ],
         "sources_to_check": [
-          "web",
-          "knowledge_base"
+          "knowledge_base",
+          "web"
         ],
-        "output_format": "Structured write-up with (1) a short conceptual pipeline diagram description, (2) a table mapping hallucination types → whether RAG helps → why/why not → typical failure mode, and (3) a checklist of practical mitigations beyond vanilla RAG (e.g., retrieval quality, reranking, verification, attribution) tied to each non-fixed hallucination type."
+        "output_format": "Structured explanation with (1) mechanism section, (2) taxonomy table mapping hallucination types/causes to whether RAG helps, hurts, or doesn’t affect, plus (3) practical implications/mitigations checklist."
       },
       "tool_calls": [
         {
           "name": "web_search",
           "args": {
-            "query": "retrieval augmented generation reduces hallucination types of hallucination not fixed",
+            "query": "retrieval augmented generation reduce hallucination mechanisms grounding attribution",
             "max_results": 5
           },
-          "result": "Search results for 'retrieval augmented generation reduces hallucination types of hallucination not fixed':\n\n1. Hallucination Mitigation for Retrieval-Augmented Large Language Models: A Review\n   URL: https://www.mdpi.com/2227-7390/13/5/856\n   Snippet: March 4, 2025 - Retrieval-augmented generation (RAG) leverages the strengths of information retrieval and generative models to enhance the handling of real-time and domain-specific knowledge. Despite its advantages, limitations within RAG components may cause hallucinations, or more precisely termed confabulations in generated outputs, driving extensive research to address these limitations and mi\n\n[TRUNCATED: showed first 400 of 422 characters]\n\n2. [2404.08189] Reducing hallucination in structured outputs via Retrieval-Augmented Generation\n   URL: https://arxiv.org/abs/2404.08189\n   Snippet: April 12, 2024 - Abstract:A common and fundamental limitation of Generative AI (GenAI) is its propensity to hallucinate. While large language models (LLM) have taken the world by storm, without eliminating or at least reducing hallucinations, real-world GenAI systems may face challenges in user adoption. In the process of deploying an enterprise application that produces workflows based on natural\n\n[TRUNCATED: showed first 400 of 579 characters]\n\n3. How to Prevent AI Hallucinations with Retrieval Augmented Generation\n   URL: https://www.itconvergence.com/blog/how-to-overcome-ai-hallucinations-using-retrieval-augmented-generation/\n   Snippet: October 14, 2025 - How does Retrieval-Augmented Generation (RAG) help? RAG reduces hallucinations by retrieving information from trusted external sources and using it to guide AI-generated responses.\n\n4. MEGA-RAG: a retrieval-augmented generation framework with ...\n   URL: https://pmc.ncbi.nlm.nih.gov/articles/PMC12540348/\n   Snippet: Checking your browser before accessing pmc.ncbi.nlm.nih.gov · Click here if you are not automatically redirected after 5 seconds\n\n5. Reduce AI Hallucinations With This Neat Software Trick | WIRED\n   URL: https://www.wired.com/story/reduce-ai-hallucinations-with-rag/\n   Snippet: June 14, 2024 - During conversations with multiple experts, it became clear that just how much RAG lowers hallucinations depends on two core things: the quality of the overall RAG implementation, and how you decide to define AI hallucinations, a sometimes fuzzy ...",
+          "result": "Search results for 'retrieval augmented generation reduce hallucination mechanisms grounding attribution':\n\n1. Reducing hallucination in structured outputs via Retrieval ...\n   URL: https://arxiv.org/abs/2404.08189\n   Snippet: Apr 12, 2024 · In the process of deploying an enterprise application that produces workflows based on natural language requirements, we devised a system leveraging Retrieval Augmented Generation (RAG) to greatly improve the quality of the structured output that represents such workflows.\n\n2. Detecting Hallucinations in Retrieval-Augmented Generation ...\n   URL: https://arxiv.org/pdf/2607.04223\n   Snippet: Jul 7, 2026 · We provide an attribution mechanism that returns a can-didate supporting passage for each sentence at no extra cost, and evaluate it against NLI and lexical controls.\n\n3. Hyper-RAG: combating LLM hallucinations using hypergraph ...\n   URL: https://www.nature.com/articles/s41467-026-71411-1\n   Snippet: Apr 27, 2026 · To address this, we introduce Hyper-RAG, a hypergraph-driven Retrieval-Augmented Generation method that comprehensively captures both pairwise and beyond-pairwise correlations in...\n\n4. ReRag: A New Architecture for Reducing the Hallucination by ...\n   URL: https://ieeexplore.ieee.org/document/10773428\n   Snippet: Recently, Retrieval-Augmented Generation systems (RAG) have been introduced to cope with this problem. In this paper, we propose a new method, called “ReRag for Retrieval Augmented Generation”, to reduce the hallucination effect of LLM responses.\n\n5. Taming AI Hallucinations: Innovations in Retrieval-Augmented ...\n   URL: https://link.springer.com/chapter/10.1007/978-3-031-93681-4_3\n   Snippet: Oct 1, 2025 · Retrieval Augmented Generation (RAG) has emerged as a game-changing solution to the persistent challenge of hallucinations in AI systems, offering a robust framework for grounding responses in factual up-to-date information.",
           "failed": false,
-          "seconds": 2.0
+          "seconds": 1.26
         },
         {
-          "name": "web_search",
+          "name": "knowledge_search",
           "args": {
-            "query": "RAG hallucination intrinsics extrinsics attribution errors not solved by retrieval",
-            "max_results": 5
+            "query": "retrieval-augmented generation hallucination types not fixed",
+            "top_n": 5
           },
-          "result": "Search results for 'RAG hallucination intrinsics extrinsics attribution errors not solved by retrieval':\n\n1. Hallucination Mitigation for Retrieval-Augmented Large Language Models: A Review\n   URL: https://www.mdpi.com/2227-7390/13/5/856\n   Snippet: March 4, 2025 - Retrieval-augmented generation (RAG) leverages the strengths of information retrieval and generative models to enhance the handling of real-time and domain-specific knowledge. Despite its advantages, limitations within RAG components may cause hallucinations, or more precisely termed confabulations in generated outputs, driving extensive research to address these limitations and mi\n\n[TRUNCATED: showed first 400 of 422 characters]\n\n2. Attribution Techniques for Mitigating Hallucinated Information in RAG Systems: A Survey\n   URL: https://arxiv.org/html/2601.19927v1\n   Snippet: January 10, 2026 - However, while RAG effectively mitigates certain types of hallucination inherent in LLMs, it also introduces new challenges. The retrieval process may yield outdated, irrelevant, or unverifiable information, which can mislead the generator and result in new forms of hallucination Bu et al.\n\n3. A Survey on Hallucination in Large Language Models: Principles, Taxonomy, Challenges, and Open Questions | ACM Transactions on Information Systems\n   URL: https://dl.acm.org/doi/10.1145/3703155\n   Snippet: Specifically, intrinsic hallucinations pertain to the model outputs that directly conflict with the provided source context. On the other hand, extrinsic hallucinations involve outputs that cannot be verified using the provided source context ...\n\n4. The Semantic Illusion: Certified Limits of Embedding-Based Hallucination Detection in RAG Systems\n   URL: https://arxiv.org/html/2512.15068\n   Snippet: December 18, 2025 - Retrieval-Augmented Generation (RAG) systems remain susceptible to hallucinations despite grounding in retrieved evidence. While current detection methods leverage embedding similarity and natural language inference (NLI), their reliability in safety-critical settings remains unproven.\n\n5. Attribution Techniques for Mitigating Hallucinated Information in RAG\n   URL: https://arxiv.org/pdf/2601.19927\n   Snippet: Attribution Techniques for Mitigating Hallucinated Information in RAG · Nanyang Technological University, Singapore",
+          "result": "5 passage(s) for 'retrieval-augmented generation hallucination types not fixed' (semantic 10 + BM25 10 → 15 fused → reranked)\n\n1. [large-language-model.pdf p.14] score=0.4334 via semantic+bm25\ny,\nhallucinations in the context of LLMs correspond to the generation of text or responses that seem syntactically sound, fluent, and natural but are factually incorrect, nonsensical, or unfaithful to the\nprovided source input.[133] Neuroscientist Terrence Sejnowski has argued that \"The diverging opinions of\nexperts on the intelligence of LLMs suggests that our old ideas based on natural intelligence are\ninadequate\".[123]\nEfforts to reduce or compensate for hallucinations have employed automated reasoning, retrieval-\naugmented generation (RAG), fine-tuning, and other methods.[134]\n\n2. [large-language-model.pdf p.14] WEAK score=0.0641 via semantic+bm25\ncombining existing writing\",[128][131] a phenomenon known as stochastic parrot, or they point to the deficits existing LLMs continue to have in prediction skills, reasoning skills, agency, and\nexplainability.[123] For example, GPT-4 has natural deficits in planning and in real-time learning.[125]\nGenerative LLMs have been observed to confidently assert claims of fact which do not seem to be\njustified by their training data, a phenomenon which has been termed \"hallucination\".[132] Specifically,\nhallucinations in the context of LLMs correspond to the generation of text or responses that seem\n\n3. [retrieval-augmented-generation.pdf p.4] WEAK score=0.0412 via semantic\nhis is to do a traditional text search, add those results to the text chunks linked to the retrieved vectors from the vector search, and feed the combined hybrid text into the language model for generation.\nRAG systems are commonly evaluated using benchmarks designed to test retrievability, retrieval\naccuracy and generative quality. Popular datasets include BEIR, a suite of information retrieval tasks\nacross diverse domains, and Natural Questions or Google QA for open-domain QA.\nRAG does not prevent hallucinations in LLMs. According to Ars Technica, \"It is not a direct solution\n\n4. [retrieval-augmented-generation.pdf p.4] WEAK score=0.0199 via semantic\nRAG does not prevent hallucinations in LLMs. According to Ars Technica, \"It is not a direct solution because the LLM can still hallucinate around the source material in its response.\"[4]\nChunking\nHybrid search\nEvaluation and benchmarks\nChallenges\n\n5. [retrieval-augmented-generation.pdf p.1] WEAK score=0.019 via semantic+bm25\nRetrieval-augmented generation\nRetrieval-augmented generation (RAG) is a technique that enables large language models (LLMs) to\nretrieve and incorporate new information from external data sources.[1] With RAG, LLMs first refer to a\nspecified set of documents, then respond to user queries. These documents supplement information from\nthe LLM's pre-existing training data.[2] This allows LLMs to use domain-specific and/or updated",
           "failed": false,
-          "seconds": 3.12
+          "seconds": 4.3
         }
       ],
-      "tokens": 2860,
+      "tokens": 4217,
       "steps": 3,
-      "captured_at": "2026-08-23T21:30:21+00:00",
+      "captured_at": "2026-08-24T05:54:56+00:00",
       "model": "gpt-5.2"
     },
     "researcher": {

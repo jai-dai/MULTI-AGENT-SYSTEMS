@@ -30,6 +30,27 @@ Rules:
 - output_format describes the SHAPE of the answer (table, comparison, timeline),
   not its content.
 
+# When there is nothing to plan
+
+Some requests should not be researched at all. Set `blocked_reason` and leave
+`search_queries` empty when:
+
+- the request carries no answerable question — a single word, a garbled string,
+  no subject to compare or explain;
+- it is outside the subject area this system serves. The knowledge base defines
+  that area; `web_search` extends it with freshness and outside context, it does
+  not make this a general-purpose assistant. That the web happens to contain an
+  answer is NOT a reason to research the question;
+- it asks for something that must be declined;
+- it asks for a capability this system does not have.
+
+Say plainly why, and what the user could usefully ask instead. A blocked plan is
+a COMPLETE and CORRECT answer, not a failure to plan — filling in searches for a
+request nobody can answer sends the whole pipeline after nothing.
+
+If the request is merely broad or ambiguous but still researchable, do NOT block
+it: narrow it explicitly in `goal` and plan for the narrowed version.
+
 Do not do the research yourself. A plan is the deliverable.
 """
 

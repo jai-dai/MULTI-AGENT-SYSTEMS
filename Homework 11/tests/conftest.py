@@ -140,11 +140,27 @@ def pytest_sessionfinish(session, exitstatus):
     print(f"\n{'метрика':26} {'порог':>6} {'n':>3} {'сред':>6} "
           f"{'мин':>6} {'макс':>6} {'прошло':>8}")
     print("-" * 66)
+    broken_total = 0
     for name, group in sorted(by_metric.items()):
-        scores = [r["score"] for r in group]
+        # Балл None означает, что метрика УПАЛА, а не что она равна нулю. Первая
+        # версия этой таблицы складывала их наравне со всеми и рушилась на
+        # TypeError — причём в `sessionfinish`, то есть уносила с собой и итог
+        # pytest. Незамеренное надо считать отдельно: провайдер, кончившийся на
+        # середине прогона, — это не «система стала хуже».
+        scores = [r["score"] for r in group if r["score"] is not None]
+        broken = len(group) - len(scores)
+        broken_total += broken
         threshold = group[0]["threshold"]
-        ok = sum(r["passed"] for r in group)
-        print(f"{name[:26]:26} {threshold:>6} {len(group):>3} "
+        note = f"  ⚠️ {broken} не измерено" if broken else ""
+        if not scores:
+            print(f"{name[:26]:26} {threshold:>6} {len(group):>3} "
+                  f"{'—':>6} {'—':>6} {'—':>6} {'—':>8}{note}")
+            continue
+        ok = sum(r["passed"] for r in group if r["score"] is not None)
+        print(f"{name[:26]:26} {threshold:>6} {len(scores):>3} "
               f"{sum(scores)/len(scores):>6.2f} {min(scores):>6.2f} "
-              f"{max(scores):>6.2f} {ok:>4}/{len(group):<3}")
+              f"{max(scores):>6.2f} {ok:>4}/{len(scores):<3}{note}")
+    if broken_total:
+        print(f"\n⚠️  {broken_total} метрик НЕ ИЗМЕРЕНО — это сбой оценки, а не "
+              f"результат системы. Причина в поле reason у соответствующих строк.")
     print(f"\nбаллы: {_BASELINE.relative_to(ROOT)}")

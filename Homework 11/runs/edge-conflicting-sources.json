@@ -5,80 +5,111 @@
   "stages": {
     "planner": {
       "output": {
-        "goal": "Determine LangChain’s current recommended way to build agents (vs legacy AgentExecutor), including what is considered “legacy”, what to use instead, and practical migration guidance.",
+        "goal": "Determine LangChain’s current (docs-era) recommended agent-building API and whether the legacy AgentExecutor/initialize_agent path is still recommended, including what to use instead and when.",
+        "blocked_reason": null,
         "search_queries": [
-          "LangChain AgentExecutor legacy agents recommended",
-          "site:docs.langchain.com AgentExecutor legacy",
-          "site:python.langchain.com AgentExecutor deprecated",
-          "LangChain \"langchain_classic\" AgentExecutor",
-          "LangChain agents \"LangGraph\" recommended approach",
-          "site:docs.langchain.com \"LangGraph\" agents vs AgentExecutor",
-          "LangChain v0.2 agents AgentExecutor vs LangGraph",
-          "LangChain migration from AgentExecutor to LangGraph",
-          "\"create_react_agent\" LangGraph LangChain",
-          "\"langchain classic\" agents documentation"
+          "docs.langchain.com AgentExecutor legacy recommended",
+          "site:docs.langchain.com oss/python langchain agents \"LangGraph primitives\"",
+          "site:reference.langchain.com AgentExecutor \"legacy\" \"not actively supported\"",
+          "langchain_classic AgentExecutor reference legacy",
+          "LangChain 1.0 agents API AgentExecutor deprecation",
+          "LangChain create_agent vs AgentExecutor",
+          "LangGraph when to use vs LangChain agents",
+          "site:langchain.com/blog LangChain LangGraph 1.0 milestones agents",
+          "site:github.com/langchain-ai AgentExecutor deprecated initialize_agent deprecated",
+          "langchain_community AgentExecutor legacy not actively supported"
         ],
         "sources_to_check": [
           "web",
           "knowledge_base"
         ],
-        "output_format": "Brief advisory note with: (1) current recommendation (bullet list), (2) status matrix (AgentExecutor vs LangGraph vs other APIs) with columns: stability/support, when to use, key limitations, (3) migration checklist + minimal example pointers/links."
+        "output_format": "Short report with (1) current recommendation summary, (2) status table mapping legacy APIs → current equivalents (AgentExecutor/initialize_agent/create_react_agent etc.), and (3) decision guide: when to use LangChain high-level agents vs implement directly in LangGraph, with citations/links."
       },
       "tool_calls": [
         {
           "name": "web_search",
           "args": {
-            "query": "LangChain AgentExecutor legacy recommended 2026 agent api state",
+            "query": "LangChain agent API recommended AgentExecutor legacy 2025",
             "max_results": 5
           },
-          "result": "ERROR: search failed (DDGSException: ConnectError: ConnectError('error sending request for url (https://yandex.com/search/site/?text=LangChain+AgentExecutor+legacy+recommended+2026+agent+api+state&web=1&searchid=5017503) > client error (Connect) > dns error > DNS error: error response: Server Failure')). Try again with a different query.",
+          "result": "ERROR: search failed (DDGSException: ConnectError: ConnectError('error sending request for url (https://yandex.com/search/site/?text=LangChain+agent+API+recommended+AgentExecutor+legacy+2025&web=1&searchid=9293679) > client error (Connect) > dns error > DNS error: error response: Server Failure')). Try again with a different query.",
           "failed": true,
-          "seconds": 2.96
+          "seconds": 2.77
         },
         {
           "name": "web_search",
           "args": {
-            "query": "site:python.langchain.com AgentExecutor deprecated \"LangGraph\" agents recommended",
+            "query": "site:python.langchain.com AgentExecutor legacy agents recommended",
             "max_results": 5
           },
-          "result": "ERROR: search failed (DDGSException: ConnectError: ConnectError('error sending request for url (https://yandex.com/search/site/?text=site%3Apython.langchain.com+AgentExecutor+deprecated+%22LangGraph%22+agents+recommended&web=1&searchid=2155186) > client error (Connect) > dns error > DNS error: error response: Server Failure')). Try again with a different query.",
-          "failed": true,
-          "seconds": 3.01
+          "result": "Search results for 'site:python.langchain.com AgentExecutor legacy agents recommended':\n\n1. LangChain Python API Reference — LangChain documentation\n   URL: https://python.langchain.com/api_reference\n   Snippet: Danger These pages refer to the the v0.3 versions of LangChain packages and integrations. To visit the documentation for the latest versions of LangChain, visit https://docs.langchain.com and https://reference.langchain.com/python/ (for references.) For the legacy API reference (<v0.3) hosted on ReadTheDocs see https://api.python.langchain.com/.\n\n2. LangChain Python API Reference Documentation.\n   URL: https://api.python.langchain.com/en/latest/agents/langchain.agents.agent.AgentExecutor.html\n   Snippet: We would like to show you a description here but the site won’t allow us.\n\n3. ExecJavaScript — LangChain documentation\n   URL: https://python.langchain.com/v0.2/api_reference/community/tools/langchain_community.tools.riza.command.ExecJavaScript.html\n   Snippet: Setting this to True means that after the tool is called, the AgentExecutor will stop looping. param tags: List[str] | None = None # Optional list of tags associated with the tool. Defaults to None. These tags will be associated with each call to this tool, and passed as arguments to the handlers defined in callbacks.\n\n4. langchain_community.utilities.anthropic.get_token_ids ...\n   URL: https://api.python.langchain.com/en/v0.0.354/utilities/langchain_community.utilities.anthropic.get_token_ids_anthropic.html\n   Snippet: langchain_community.utilities.anthropic.get_token_ids_anthropic ¶ langchain_community.utilities.anthropic.get_token_ids_anthropic(text:str)→List[int][source] ¶\n\n5. langchain_community.llms.fireworks.completion_with_retry — ...\n   URL: https://api.python.langchain.com/en/v0.0.354/llms/langchain_community.llms.fireworks.completion_with_retry.html\n   Snippet: langchain_community.llms.fireworks.completion_with_retry ¶ langchain_community.llms.fireworks.completion_with_retry(llm:Fireworks, use_retry:bool, *, run_manager ...",
+          "failed": false,
+          "seconds": 1.26
+        },
+        {
+          "name": "knowledge_search",
+          "args": {
+            "query": "AgentExecutor legacy recommended way to build agents LangChain",
+            "top_n": 5
+          },
+          "result": "5 passage(s) for 'AgentExecutor legacy recommended way to build agents LangChain' (semantic 10 + BM25 10 → 15 fused → reranked)\nNOTE: every passage scored BELOW the relevance threshold. The reranker may simply have missed the wording (it does not expand acronyms). Treat these as weak evidence and verify.\n\n1. [langchain.pdf p.4] WEAK score=0.0578 via semantic+bm25\nblog.langchain.dev/langchain-expression-language/). langchain.dev. 2023-08-01.Retrieved 2024-07-08.7 blog.langchain.dev/langchain-expression-language/). langchain.dev. 2023-08-01.Retrieved 2024-07-08.7 \"Introducing LangServe, the best way to deploy yourLangChains\" (https://blog.langchain.dev/introducing-langserve/). LangChain Blog. 2023-10-12. Retrieved 2023-10-17.8. \"Announcing the General Availability of LangSmith and OurSeries A Led By Sequoia Capital\" (https://blog.langchain.com/langsmith-ga/). LangChain Blog. 2024-02-15. Retrieved2025-08-03.9. \"LangGraph Platform is now Generally Available: Deploy &manage long-running, stateful Agents\" (https://blog.langchain.com/langgraph-platform-ga/)\n\n2. [langchain.pdf p.4] WEAK score=0.0545 via semantic+bm25\ne: Deploy &manage long-running, stateful Agents\" (https://blog.langchain.com/langgraph-platform-ga/) e: Deploy &manage long-running, stateful Agents\" (https://blog.langchain.com/langgraph-platform-ga/) LangChain Blog. 2025-05-14.Retrieved 2025-08-03.10. SHRIVASTAVA\"], [\"RASHI. \"Forbes 2025 AI 50 List - TopArtificial Intelligence Companies Ranked\" (http://web.archive.org/web/20251231172014/https://www.forbes.com/lists/ai50/).Forbes. Archived from the original (https://www.forbes.com/lists/ai50/) on 2025-12-31. Retrieved 2026-01-12.11. \"Chatbots | 🦜🔗  Langchain\" (https://web.archive.org/web/20240314121243/https://python.langchain.com/docs/use_cases/chatbots/). python.langchain.com\n\n3. [langchain.pdf p.1] WEAK score=0.0441 via semantic+bm25\n-running, stateful AI agents.[9]\nIn April 2025, LangChain was featured in the Forbes AI 50 list.[10] LangChain's developers highlight the framework's applicability to use-cases including chatbots,[11] retrieval-augmented generation,[12] documentsummarization,[13] and synthetic data generation.[14] InfoWorld described LangChain as a software development kit that simplifies the connectionbetween large language models and external applications through a unified API.[15] The magazine also wrote that it can be used to bring in contextfrom sources such as PDFs, web pages, CSV files and relational\n\n4. [langchain.pdf p.1] WEAK score=0.0067 via semantic\nage models in general, including document analysis andsummarization, chatbots, and code analysis.[2] LangChain was launched in October 2022 as an open source project by Harrison Chase, whileworking at machine learning startup Robust Intelligence. In April 2023, LangChain hadincorporated and the new startup raised over $20 million in funding at a valuation of at least $200million from venture firm Sequoia Capital, a week after announcing a $10 million seed investmentfrom Benchmark.[3][4]\n\n5. [langchain.pdf p.1] WEAK score=0.0064 via semantic+bm25\nure firm Sequoia Capital, a week after announcing a $10 million seed investmentfrom Benchmark.[3][4] In the third quarter of 2023, the LangChain Expression Language (LCEL) was introduced, whichprovides a declarative way to define chains of actions.[5][6]\nIn October 2023 LangChain introduced LangServe, a deployment tool to host LCEL code as a production-ready API.[7]",
+          "failed": false,
+          "seconds": 7.43
+        },
+        {
+          "name": "knowledge_search",
+          "args": {
+            "query": "LangGraph recommended for agents LangChain deprecated AgentExecutor",
+            "top_n": 5
+          },
+          "result": "5 passage(s) for 'LangGraph recommended for agents LangChain deprecated AgentExecutor' (semantic 10 + BM25 10 → 15 fused → reranked)\nNOTE: every passage scored BELOW the relevance threshold. The reranker may simply have missed the wording (it does not expand acronyms). Treat these as weak evidence and verify.\n\n1. [langchain.pdf p.4] WEAK score=0.1376 via semantic+bm25\nblog.langchain.dev/langchain-expression-language/). langchain.dev. 2023-08-01.Retrieved 2024-07-08.7 blog.langchain.dev/langchain-expression-language/). langchain.dev. 2023-08-01.Retrieved 2024-07-08.7 \"Introducing LangServe, the best way to deploy yourLangChains\" (https://blog.langchain.dev/introducing-langserve/). LangChain Blog. 2023-10-12. Retrieved 2023-10-17.8. \"Announcing the General Availability of LangSmith and OurSeries A Led By Sequoia Capital\" (https://blog.langchain.com/langsmith-ga/). LangChain Blog. 2024-02-15. Retrieved2025-08-03.9. \"LangGraph Platform is now Generally Available: Deploy &manage long-running, stateful Agents\" (https://blog.langchain.com/langgraph-platform-ga/)\n\n2. [langchain.pdf p.4] WEAK score=0.121 via semantic+bm25\ne: Deploy &manage long-running, stateful Agents\" (https://blog.langchain.com/langgraph-platform-ga/) e: Deploy &manage long-running, stateful Agents\" (https://blog.langchain.com/langgraph-platform-ga/) LangChain Blog. 2025-05-14.Retrieved 2025-08-03.10. SHRIVASTAVA\"], [\"RASHI. \"Forbes 2025 AI 50 List - TopArtificial Intelligence Companies Ranked\" (http://web.archive.org/web/20251231172014/https://www.forbes.com/lists/ai50/).Forbes. Archived from the original (https://www.forbes.com/lists/ai50/) on 2025-12-31. Retrieved 2026-01-12.11. \"Chatbots | 🦜🔗  Langchain\" (https://web.archive.org/web/20240314121243/https://python.langchain.com/docs/use_cases/chatbots/). python.langchain.com\n\n3. [langchain.pdf p.1] WEAK score=0.03 via semantic+bm25\n-running, stateful AI agents.[9]\nIn April 2025, LangChain was featured in the Forbes AI 50 list.[10] LangChain's developers highlight the framework's applicability to use-cases including chatbots,[11] retrieval-augmented generation,[12] documentsummarization,[13] and synthetic data generation.[14] InfoWorld described LangChain as a software development kit that simplifies the connectionbetween large language models and external applications through a unified API.[15] The magazine also wrote that it can be used to bring in contextfrom sources such as PDFs, web pages, CSV files and relational\n\n4. [langchain.pdf p.1] WEAK score=0.0296 via semantic+bm25\n23 LangChain introduced LangServe, a deployment tool to host LCEL code as a production-ready API.[7] In February 2024 LangChain released LangSmith, a closed-source observability and evaluation platform for LLM applications, and announced a US$25 million Series A led by Sequoia Capital.[8] On 14 May 2025 the company launched LangGraph Platform into general availability, providingmanaged infrastructure for deploying long-running, stateful AI agents.[9]\nIn April 2025, LangChain was featured in the Forbes AI 50 list.[10]\n\n5. [langchain.pdf p.4] WEAK score=0.0068 via bm25\nnal (https://python.langchain.com/docs/use_cases/summarization) on 2024-01-06. Retrieved 2023-11-26. 14. \"Synthetic data generation | 🦜🔗  Langchain\" (https://web.archive.org/web/20240307050554/https://python.langchain.com/docs/use_cases/data_generation). python.langchain.com.Archived from the original (https://python.langchain.com/docs/use_cases/data_generation) on 2024-03-07. Retrieved2023-11-26.15. MSV, Janakiram (2023). \"A brief guide to LangChain forsoftware developers\" (https://www.infoworld.com/article/2338940/a-brief-guide-to-langchain-for-software-developers.html).InfoWorld",
+          "failed": false,
+          "seconds": 8.18
         },
         {
           "name": "web_search",
           "args": {
-            "query": "LangChain agents v0.2 v0.3 AgentExecutor documentation",
+            "query": "LangChain AgentExecutor deprecated LangGraph recommended agents",
             "max_results": 5
           },
-          "result": "Search results for 'LangChain agents v0.2 v0.3 AgentExecutor documentation':\n\n1. Agents - Docs by LangChain\n   URL: https://docs.langchain.com/oss/python/langchain/agents\n   Snippet: Agents are especially useful when they can take action rather than just generate text. The execution environment gives the agent a workspace: tools it can call, a filesystem for reading and writing files across turns, and code execution for running scripts or shell commands.\n\n2. AgentExecutor | langchain_classic | LangChain Reference\n   URL: https://reference.langchain.com/python/langchain-classic/agents/agent/AgentExecutor\n   Snippet: Jan 3, 2015 · Python API reference for agents.agent.AgentExecutor in langchain_classic. Part of the LangChain ecosystem.\n\n3. Home - Docs by LangChain\n   URL: https://docs.langchain.com/\n   Snippet: Build and run agents without code using LangSmith Fleet. Find and fix recurring agent issues automatically with LangSmith Engine. Code with an AI agent in your terminal using the open source dcode CLI. Take free courses on building and improving agents with LangSmith and our open-source frameworks.\n\n4. langchain-docs-v0.3 · GitHub\n   URL: https://github.com/langchain-docs-v0-3\n   Snippet: Nov 17, 2025 · 🦜🔗 The platform for reliable agents. Build resilient language agents as graphs.\n\n5. AgentExecutor class - langchain library - Dart API - Pub\n   URL: https://pub.dev/documentation/langchain/latest/langchain/AgentExecutor-class.html\n   Snippet: API docs for the AgentExecutor class from the langchain library, for the Dart programming language.",
-          "failed": false,
-          "seconds": 3.42
+          "result": "ERROR: search failed (DDGSException: ConnectError: ConnectError('error sending request for url (https://yandex.com/search/site/?text=LangChain+AgentExecutor+deprecated+LangGraph+recommended+agents&web=1&searchid=9138403) > client error (Connect) > dns error > DNS error: error response: Server Failure')). Try again with a different query.",
+          "failed": true,
+          "seconds": 2.56
         },
         {
-          "name": "knowledge_search",
+          "name": "web_search",
           "args": {
-            "query": "AgentExecutor LangChain legacy agents recommended LangGraph",
-            "top_n": 5
+            "query": "docs.langchain.com agents AgentExecutor legacy",
+            "max_results": 5
           },
-          "result": "5 passage(s) for 'AgentExecutor LangChain legacy agents recommended LangGraph' (semantic 10 + BM25 10 → 16 fused → reranked)\n\n1. [langchain.pdf p.4] score=0.2491 via semantic+bm25\nblog.langchain.dev/langchain-expression-language/). langchain.dev. 2023-08-01.Retrieved 2024-07-08.7 blog.langchain.dev/langchain-expression-language/). langchain.dev. 2023-08-01.Retrieved 2024-07-08.7 \"Introducing LangServe, the best way to deploy yourLangChains\" (https://blog.langchain.dev/introducing-langserve/). LangChain Blog. 2023-10-12. Retrieved 2023-10-17.8. \"Announcing the General Availability of LangSmith and OurSeries A Led By Sequoia Capital\" (https://blog.langchain.com/langsmith-ga/). LangChain Blog. 2024-02-15. Retrieved2025-08-03.9. \"LangGraph Platform is now Generally Available: Deploy &manage long-running, stateful Agents\" (https://blog.langchain.com/langgraph-platform-ga/)\n\n2. [langchain.pdf p.1] WEAK score=0.1251 via semantic+bm25\n23 LangChain introduced LangServe, a deployment tool to host LCEL code as a production-ready API.[7] In February 2024 LangChain released LangSmith, a closed-source observability and evaluation platform for LLM applications, and announced a US$25 million Series A led by Sequoia Capital.[8] On 14 May 2025 the company launched LangGraph Platform into general availability, providingmanaged infrastructure for deploying long-running, stateful AI agents.[9]\nIn April 2025, LangChain was featured in the Forbes AI 50 list.[10]\n\n3. [langchain.pdf p.4] WEAK score=0.0812 via semantic+bm25\ne: Deploy &manage long-running, stateful Agents\" (https://blog.langchain.com/langgraph-platform-ga/) e: Deploy &manage long-running, stateful Agents\" (https://blog.langchain.com/langgraph-platform-ga/) LangChain Blog. 2025-05-14.Retrieved 2025-08-03.10. SHRIVASTAVA\"], [\"RASHI. \"Forbes 2025 AI 50 List - TopArtificial Intelligence Companies Ranked\" (http://web.archive.org/web/20251231172014/https://www.forbes.com/lists/ai50/).Forbes. Archived from the original (https://www.forbes.com/lists/ai50/) on 2025-12-31. Retrieved 2026-01-12.11. \"Chatbots | 🦜🔗  Langchain\" (https://web.archive.org/web/20240314121243/https://python.langchain.com/docs/use_cases/chatbots/). python.langchain.com\n\n4. [langchain.pdf p.1] WEAK score=0.0625 via semantic+bm25\n-running, stateful AI agents.[9]\nIn April 2025, LangChain was featured in the Forbes AI 50 list.[10] LangChain's developers highlight the framework's applicability to use-cases including chatbots,[11] retrieval-augmented generation,[12] documentsummarization,[13] and synthetic data generation.[14] InfoWorld described LangChain as a software development kit that simplifies the connectionbetween large language models and external applications through a unified API.[15] The magazine also wrote that it can be used to bring in contextfrom sources such as PDFs, web pages, CSV files and relational\n\n5. [langchain.pdf p.1] WEAK score=0.0015 via bm25\nLangChain\nDeveloper Harrison Chase\nInitial release October 2022\nStable release0.1.16[1] / 11 April 2024\nWritten in Python and JavaScript\nType Software framework for largelanguage model applicationdevelopment\nLicense MIT License\nWebsite LangChain.com (https://langchain.com/)\nRepository github.com/langchain-ai/langchain (https://github.com/langchain-ai/langchain)\nLangChain\nFree and open-source softwareportal",
+          "result": "Search results for 'docs.langchain.com agents AgentExecutor legacy':\n\n1. AgentExecutor | langchain_classic | LangChain Reference\n   URL: https://reference.langchain.com/python/langchain-classic/agents/agent/AgentExecutor\n   Snippet: Jan 3, 2016 · Python API reference for agents.agent.AgentExecutor in langchain_classic. Part of the LangChain ecosystem.\n\n2. Agents - Docs by LangChain\n   URL: https://docs.langchain.com/oss/python/langchain/agents\n   Snippet: Agents are especially useful when they can take action rather than just generate text. The execution environment gives the agent a workspace: tools it can call, a filesystem for reading and writing files across turns, and code execution for running scripts or shell commands.\n\n3. Home - Docs by LangChain\n   URL: https://docs.langchain.com/\n   Snippet: Build agents with code using LangChain, LangGraph, and Deep Agents. Evaluate agents with datasets, evaluations, and prompt engineering. Deploy and serve agents at scale. Trace, debug, and observe agents in production. Set up Cloud, BYOC, or Self-hosted LangSmith, and govern users and compliance.\n\n4. Is AgentExecutor Deprecated in LangChain? The Real State of ...\n   URL: https://docs.bswen.com/blog/2026-06-16-is-agentexecutor-deprecated-langchain/\n   Snippet: Jun 17, 2026 · This post explains which LangChain agent APIs are current versus legacy in 2026. The key point is that AgentExecutor, initialize_agent, and create_react_agent are all deprecated - use create_agent instead.\n\n5. agent_toolkits | langchain_community | LangChain Reference\n   URL: https://reference.langchain.com/python/langchain-community/agent_toolkits\n   Snippet: AgentExecutor is an agent abstraction that has long been considered legacy and is not actively supported as the recommended foundation for new production applications.",
           "failed": false,
-          "seconds": 5.54
+          "seconds": 1.69
         },
         {
-          "name": "knowledge_search",
+          "name": "web_search",
           "args": {
-            "query": "LangChain agent API current recommended approach LangGraph prebuilt agents",
-            "top_n": 5
+            "query": "reference.langchain.com langchain-community AgentExecutor legacy not actively supported recommended foundation",
+            "max_results": 5
           },
-          "result": "5 passage(s) for 'LangChain agent API current recommended approach LangGraph prebuilt agents' (semantic 10 + BM25 10 → 15 fused → reranked)\n\n1. [langchain.pdf p.1] score=0.1778 via semantic+bm25\n23 LangChain introduced LangServe, a deployment tool to host LCEL code as a production-ready API.[7] In February 2024 LangChain released LangSmith, a closed-source observability and evaluation platform for LLM applications, and announced a US$25 million Series A led by Sequoia Capital.[8] On 14 May 2025 the company launched LangGraph Platform into general availability, providingmanaged infrastructure for deploying long-running, stateful AI agents.[9]\nIn April 2025, LangChain was featured in the Forbes AI 50 list.[10]\n\n2. [langchain.pdf p.1] WEAK score=0.1488 via semantic+bm25\n-running, stateful AI agents.[9]\nIn April 2025, LangChain was featured in the Forbes AI 50 list.[10] LangChain's developers highlight the framework's applicability to use-cases including chatbots,[11] retrieval-augmented generation,[12] documentsummarization,[13] and synthetic data generation.[14] InfoWorld described LangChain as a software development kit that simplifies the connectionbetween large language models and external applications through a unified API.[15] The magazine also wrote that it can be used to bring in contextfrom sources such as PDFs, web pages, CSV files and relational\n\n3. [langchain.pdf p.4] WEAK score=0.0971 via semantic+bm25\nblog.langchain.dev/langchain-expression-language/). langchain.dev. 2023-08-01.Retrieved 2024-07-08.7 blog.langchain.dev/langchain-expression-language/). langchain.dev. 2023-08-01.Retrieved 2024-07-08.7 \"Introducing LangServe, the best way to deploy yourLangChains\" (https://blog.langchain.dev/introducing-langserve/). LangChain Blog. 2023-10-12. Retrieved 2023-10-17.8. \"Announcing the General Availability of LangSmith and OurSeries A Led By Sequoia Capital\" (https://blog.langchain.com/langsmith-ga/). LangChain Blog. 2024-02-15. Retrieved2025-08-03.9. \"LangGraph Platform is now Generally Available: Deploy &manage long-running, stateful Agents\" (https://blog.langchain.com/langgraph-platform-ga/)\n\n4. [langchain.pdf p.4] WEAK score=0.0784 via semantic+bm25\ne: Deploy &manage long-running, stateful Agents\" (https://blog.langchain.com/langgraph-platform-ga/) e: Deploy &manage long-running, stateful Agents\" (https://blog.langchain.com/langgraph-platform-ga/) LangChain Blog. 2025-05-14.Retrieved 2025-08-03.10. SHRIVASTAVA\"], [\"RASHI. \"Forbes 2025 AI 50 List - TopArtificial Intelligence Companies Ranked\" (http://web.archive.org/web/20251231172014/https://www.forbes.com/lists/ai50/).Forbes. Archived from the original (https://www.forbes.com/lists/ai50/) on 2025-12-31. Retrieved 2026-01-12.11. \"Chatbots | 🦜🔗  Langchain\" (https://web.archive.org/web/20240314121243/https://python.langchain.com/docs/use_cases/chatbots/). python.langchain.com\n\n5. [langchain.pdf p.3] WEAK score=0.032 via bm25\nzeinformationusingunsupervisedlearning\nhttps://python.langchain.com/docs/integrations/tools/memorize Nuclia No Yes Commercial Indexing ofunstructureddata https://python.langchain.com/docs/integrations/tools/nuclia\nOpenWeatherMap No Yes Commercial Weather data https://python.langchain.com/docs/integrations/tools/openweathermap\nPolygon StockMarket API No Yes Commercial Stock marketdata https://python.langchain.com/docs/integrations/tools/polygon\nPubMed No No Opensource Biomedicalliterature https://python.langchain.com/docs/integrations/tools/pubmed",
+          "result": "ERROR: search failed (DDGSException: ConnectError: ConnectError('error sending request for url (https://yandex.com/search/site/?text=reference.langchain.com+langchain-community+AgentExecutor+legacy+not+actively+supported+recommended+foundation&web=1&searchid=5450591) > client error (Connect) > dns error > DNS error: error response: Server Failure')). Try again with a different query.",
+          "failed": true,
+          "seconds": 3.26
+        },
+        {
+          "name": "web_search",
+          "args": {
+            "query": "docs.langchain.com oss python langchain agents recommended LangGraph",
+            "max_results": 5
+          },
+          "result": "Search results for 'docs.langchain.com oss python langchain agents recommended LangGraph':\n\n1. Agents - Docs by LangChain\n   URL: https://docs.langchain.com/oss/python/langchain/agents\n   Snippet: Agents are especially useful when they can take action rather than just generate text. The execution environment gives the agent a workspace: tools it can call, a filesystem for reading and writing files across turns, and code execution for running scripts or shell commands.\n\n2. Learn - Docs by LangChain\n   URL: https://docs.langchain.com/oss/python/learn\n   Snippet: LangChain’s agent implementations use LangGraph primitives. If deeper customization is required, agents can be implemented directly in LangGraph. Build a RAG agent using LangGraph primitives for fine-grained control. Implement a SQL agent directly in LangGraph for maximum flexibility.\n\n3. langgraph | LangChain Reference\n   URL: https://reference.langchain.com/python/langgraph\n   Snippet: We recommend you use LangGraph when you have advanced needs that require a combination of deterministic and agentic workflows, heavy customization, and carefully controlled latency.\n\n4. LangChain - Python API Reference\n   URL: https://reference.langchain.com/python/langchain/overview\n   Snippet: Welcome to the LangChain package reference documentation! Most users will primarily interact with the main langchain package, which provides the complete set of implementations for building LLM applications.\n\n5. LangChain and LangGraph Agent Frameworks Reach v1.0 Milestones\n   URL: https://www.langchain.com/blog/langchain-langgraph-1dot0\n   Snippet: Oct 22, 2025 · LangChain lets you build and ship agents fast with high-level abstractions for common patterns, while LangGraph gives you fine-grained control for complex workflows that require customization.",
           "failed": false,
-          "seconds": 6.32
+          "seconds": 3.27
         }
       ],
-      "tokens": 4331,
-      "steps": 6,
-      "captured_at": "2026-08-23T21:32:36+00:00",
+      "tokens": 19755,
+      "steps": 9,
+      "captured_at": "2026-08-24T05:57:36+00:00",
       "model": "gpt-5.2"
     },
     "e2e": {
