@@ -1,0 +1,15 @@
+.env
+*.log
+mail/
+__pycache__/
+*.pyc
+output/
+index*/
+.idea/
+.venv/
+.DS_Store
+
+# Личные данные: домены контрагентов и разметка по своему корпусу.
+weights.yaml
+eval_queries.json
+.private-names.txt
