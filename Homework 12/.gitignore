@@ -1,0 +1,13 @@
+.env
+*.log
+mail/
+__pycache__/
+*.pyc
+output/
+index*/
+.idea/
+.venv/
+.DS_Store
+weights.yaml
+eval_queries.json
+.private-names.txt
