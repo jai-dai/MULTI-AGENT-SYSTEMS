@@ -1,0 +1,23 @@
+.env
+# Run logs: серверы говорчивые, их вывод describes one machine's run.
+*.log
+# Твоя настоящая почта: SQLite с письмами и сохранённые вложения.
+mail/
+__pycache__/
+*.pyc
+output/
+index*/
+.idea/
+.venv/
+.DS_Store
+.pytest_cache/
+.deepeval*
+
+# Личные данные: домены контрагентов и разметка по своему корпусу.
+weights.yaml
+eval_queries.json
+.private-names.txt
+
+# runs/ НЕ игнорируется намеренно — см. README «Прогон стоит денег, оценка нет».
+# Это зафиксированные следы прогонов, то есть входные данные тестов. Без них
+# `deepeval test run` у постороннего человека начинается с 950k токенов.
