@@ -128,7 +128,11 @@ def _ask_human(action: dict):
             choice = "reject"
 
         if choice in ("approve", "a", "y", "yes", "да"):
-            return {"type": "accept"}
+            # ИМЕННО "approve", а не "accept". Литерал сверяется в
+            # `_process_decision` строкой, и незнакомое значение приводит к
+            # `Unexpected human decision` — то есть падению у живого человека,
+            # нажавшего «да».
+            return {"type": "approve"}
         if choice in ("edit", "e", "правка"):
             try:
                 feedback = input("  ✏️  что изменить: ").strip()
