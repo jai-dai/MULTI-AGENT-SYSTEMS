@@ -134,7 +134,14 @@ class LangChainExecutor(AgentExecutor):
             with get_usage_metadata_callback() as usage:
                 result = await agent.ainvoke(
                     {"messages": [HumanMessage(content=request)]},
-                    config={"callbacks": observability.callbacks(trace_ctx)})
+                    # `run_name` — не косметика. Без него ВСЕ суб-агенты приезжают
+                    # в дерево под одинаковым именем `LangGraph` (так называется
+                    # граф в LangChain), и восемь одинаковых узлов невозможно
+                    # различить: где планировщик, где критик, а где второй раунд
+                    # исследователя. Дерево технически верное и практически
+                    # нечитаемое. Одна строка превращает его в понятное.
+                    config={"callbacks": observability.callbacks(trace_ctx),
+                            "run_name": self._role.NAME})
             answer = _payload(result)
             total = sum(u.get("total_tokens", 0) for u in usage.usage_metadata.values())
             print(f"[{self._role.NAME}] {total} токенов", flush=True)

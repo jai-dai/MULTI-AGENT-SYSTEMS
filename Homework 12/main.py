@@ -134,7 +134,11 @@ def _ask_human(action: dict):
             choice = "reject"
 
         if choice in ("approve", "a", "y", "yes", "да"):
-            return {"type": "accept"}
+            # ИМЕННО "approve", а не "accept". Литерал сверяется в
+            # `_process_decision` строкой, и незнакомое значение приводит к
+            # `Unexpected human decision` — то есть падению у живого человека,
+            # нажавшего «да».
+            return {"type": "approve"}
         if choice in ("edit", "e", "правка"):
             try:
                 feedback = input("  ✏️  что изменить: ").strip()
@@ -186,11 +190,16 @@ async def run_once(supervisor: Supervisor, request: str, thread: str,
     #   root_span            — ВЛАДЕЕТ контекстом OTel, чтобы `carrier()` внутри
     #                          асинхронных инструментов не вернул пустоту.
     with _traced(request, session_id):
-        with observability.root_span("multi-agent-research", input=request):
+        with observability.root_span("multi-agent-research", input=request) as root:
             # Снимаем контекст ЗДЕСЬ — это единственное место, где он гарантированно
             # есть. Дальше он едет параметром, а не через окружение.
             supervisor.trace_carrier = observability.carrier()
-            return await _loop(supervisor, payload, config_)
+            answer = await _loop(supervisor, payload, config_)
+            # Без этого в корне трассы стоит `undefined`: сам span не знает, чем
+            # кончилась работа, — вход мы ему дали, выход обязаны дать тоже.
+            if root is not None and hasattr(root, "update"):
+                root.update(output=answer)
+            return answer
 
 
 def _traced(request: str, session_id: str | None):
