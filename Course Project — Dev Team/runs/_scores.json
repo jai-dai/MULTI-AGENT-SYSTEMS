@@ -1,0 +1,130 @@
+[
+  {
+    "test": "test_code_covers_spec[csv-summary]",
+    "metric": "Code Covers Spec [GEval]",
+    "score": 0.9,
+    "threshold": 0.7,
+    "passed": true,
+    "reason": "The implementation genuinely covers nearly every specified requirement: it streams rows via csv.DictReader (no full-file load), validates the header and raises CSVSchemaError naming the missing columns or an invalid/missing header, accepts `name`/`amount` in any order (test_columns_any_order), ignores extra columns, trims whitespace and rejects NaN/Infinity via math.isfinite in _parse_finite_float, collects invalid rows with reader.line_num (1-based including header), raw amount text and reason \"invalid number\" without raising, aggregates sum/count only over valid values, returns average=None with sum=0.0 when count==0, and returns a single dict with sum/average/count/invalid_rows appended in file order (deterministic). Minor shortcomings: the \"header missing\" case is only detectable when required column names are absent — a headerless file whose first line happens to contain valid data is silently consumed as a header, and file-level errors (nonexistent path, encoding/decoding failures) are not wrapped or handled, only column-schema errors; also non-finite detection relies on Python's float() accepting \"Infinity\"/\"NaN\", which is handled, but rows with missing amount keys are lumped under the generic \"invalid number\" reason rather than a distinct cause. Overall coverage is essentially complete with small gaps in I/O error handling."
+  },
+  {
+    "test": "test_code_covers_spec[date-minmax]",
+    "metric": "Code Covers Spec [GEval]",
+    "score": 0.9,
+    "threshold": 0.7,
+    "passed": true,
+    "reason": "The implementation covers essentially every specified requirement: find_min_max_dates takes a single list argument; strict zero-padded YYYY-MM-DD is enforced via the regex ^(\\d{4})-(\\d{2})-(\\d{2})$ (so '2026-1-01' is rejected, as its test asserts); non-string items are flagged with reason 'не рядок'; malformed strings like '2026/01/01' get 'невірний формат'; format-valid but calendar-invalid values like '2026-02-30' and '2023-02-29' are caught by the date() ValueError with 'некоректна календарна дата'; each DateValidationError carries index, original value, and reason category; min/max are returned as consistently formatted ISO strings via isoformat(); with no valid dates both fields are None plus the error tuple; the structured-result contract is chosen explicitly and documented; and the input list is only iterated, never mutated. It goes further with defensive handling of non-list top-level input (index=-1) and an empty-list case, backed by acceptance tests. Only minor gaps: the open questions about alternative notations, exception-vs-result, and date-object type are resolved unilaterally rather than flagged for agreement, and there is no explicit rejection of out-of-range years or handling of nested/None inside list beyond the generic non-string path (which is adequate)."
+  },
+  {
+    "test": "test_code_covers_spec[email-validator]",
+    "metric": "Code Covers Spec [GEval]",
+    "score": 1.0,
+    "threshold": 0.7,
+    "passed": true,
+    "reason": "Практично кожне правило специфікації реалізовано у коді, а не лише задекларовано: перевірка типу (isinstance -> type_invalid, включно з None), порожній/пробільний рядок (empty), відсутність trim та відхилення зовнішніх пробілів (has_outer_whitespace), рівно один '@' (at_symbol_count_invalid), порожній local/domain, ліміти 254 та 64 символи, керівні символи через _has_control_char плюс '\"' і '\\\\' у local-part, крапки на початку/кінці та '..' для local і domain, наявність TLD, довжина labels 1..63, дозволені символи a-z/A-Z/0-9/'-' та розміщення дефіса, а також не-ASCII у домені (domain_invalid_chars). Результат структурований як dict з is_valid і reason (None при валідному), використано лише стандартну бібліотеку (dataclasses, typing, unittest), порядок перевірок жорстко детермінований і підтверджений тестом \" user@@example.com\". Незначні розбіжності: перевірка загальної довжини виконується до перевірки '@'/порожніх частин (специфікація не приписує порядок, тож це допустимо), а email.strip()==\"\"\" технічно дублює гілку has_outer_whitespace лише для пробільних рядків — коректно, але надлишково; ці деталі не порушують жодного вимогового пункту."
+  },
+  {
+    "test": "test_vague_request_is_not_invented[vague-request]",
+    "metric": "No Invention [GEval]",
+    "score": 0.2,
+    "threshold": 0.7,
+    "passed": false,
+    "reason": "The input story \"Зроби щось для роботи з користувачами\" names no subject at all — no boundaries, no goal — so the expected behaviour was to state plainly that the subject is missing and enumerate the blocking open questions. The response does acknowledge the request is \"надто загальний\", but then immediately invents an entire CRUD user-management module nobody asked for: concrete entities and fields (id, email unique, full_name, status, created_at, updated_at), operations (create/read/partial update/list/deactivate), interface details (HTTP 409/404/400 semantics, JSON schemas, pagination, sorting, filters), and even a storage decision (soft delete instead of physical deletion). This is exactly the fabricated scope the criteria penalise. The trailing open questions about auth, passwords, roles, and audit do not repair the invention, since they are appended after a fully specified system has already been asserted as requirements. Only a small credit is warranted for flagging the vagueness and for listing genuine unknowns."
+  },
+  {
+    "test": "test_review_is_complete[csv-summary]",
+    "metric": "Review Completeness [GEval]",
+    "score": 0.9,
+    "threshold": 0.7,
+    "passed": true,
+    "reason": "The code actually satisfies the stated requirements: it streams via csv.DictReader, validates the header for exact `name`/`amount` in any order and raises CSVSchemaError naming missing columns, ignores extra columns, trims whitespace and rejects NaN/Infinity via math.isfinite, collects invalid rows (line via reader.line_num, raw value, reason) without raising, aggregates only valid rows, returns sum=0/average=None when count==0, and preserves file order in invalid_rows. The review's APPROVED verdict therefore does not endorse any real violation, and its remarks (narrowing `except Exception`, richer reason strings, an extra header-message test) are correctly framed as optional style/robustness suggestions rather than defects. Minor weakness: it does not explicitly walk through each requirement (e.g., the multi-line quoted-field edge case where reader.line_num can exceed the row's starting line, or the header-only case), so the justification for approval is somewhat thin, but no genuine defect is missed."
+  },
+  {
+    "test": "test_review_is_complete[date-minmax]",
+    "metric": "Review Completeness [GEval]",
+    "score": 0.9,
+    "threshold": 0.7,
+    "passed": true,
+    "reason": "The code satisfies every explicit requirement: single-argument function, strict zero-padded YYYY-MM-DD regex, rejection of non-strings, malformed strings and calendar-invalid dates, per-error index/value/reason, min/max as consistent ISO strings, None/None plus error list when no valid dates, structured-result contract, and no mutation of the input. The review's APPROVED verdict is therefore correct, and it names no false defects. It also usefully flags the genuine edge case that Python's '$' allows a trailing newline (e.g. '2026-01-01\\n' would be accepted despite arguably violating the strict-format rule) and correctly labels it optional/needs-clarification rather than treating open questions as violations. Minor shortcoming: that trailing-newline behavior is arguably a real breach of the strict-format requirement and was demoted to an optional suggestion, and the other notes (year 0000, missing non-mutation test) are unstated conventions/test-coverage preferences rather than requirement checks."
+  },
+  {
+    "test": "test_review_is_complete[email-validator]",
+    "metric": "Review Completeness [GEval]",
+    "score": 0.9,
+    "threshold": 0.7,
+    "passed": true,
+    "reason": "The code, checked rule by rule, satisfies every explicit requirement: type check, empty/whitespace-only, outer whitespace without trimming, exactly one '@', empty local/domain, 254/64 length caps, local-part forbidden chars (space, control, quote, backslash), local dot placement, domain char/non-ASCII rejection, TLD dot presence, domain dot placement, label length 1..63, label charset, hyphen placement, stable {is_valid, reason} dict with reason=null when valid, stdlib only, and a fixed deterministic check order. The only arguable deviation — total-length check placed before the '@'-count check — is not a violation, since the requirements are an unordered set and no rule prescribes a relative ordering; determinism is preserved. The review's APPROVED verdict therefore correctly identifies that there are no real defects, and it invents no phantom issues, framing its three points explicitly as optional (boundary tests, non-ASCII local-part being unspecified rather than wrong, typed result documentation). Minor weakness: the review is thin on demonstrating rule-by-rule verification and offers no explicit statement about the length-before-'@' ordering, which a reader might wonder about, but it never approves anything that breaks a stated rule."
+  },
+  {
+    "test": "test_review_is_useful[csv-summary]",
+    "metric": "Review Is Useful [GEval]",
+    "score": 0.8,
+    "threshold": 0.7,
+    "passed": true,
+    "reason": "The review issues an APPROVED verdict with no blocking issues, which is consistent with the code largely satisfying the spec, and the three suggestions are all concrete and actionable: each names a specific location (the `except Exception` handler in `aggregate_csv_amounts` in csv_aggregator.py, the constant `reason=\"invalid number\"` field, and the absence of a test asserting the header-error message), states what is wrong, and proposes a specific replacement (`except (ValueError, TypeError)`, reasons like \"empty\"/\"non-finite\", a new test locking the header message). None are vague quality complaints, and a developer could act on all three without clarification. The suggestions are also appropriately framed as optional polish rather than grounds for rejection, so no style-only rejection penalty applies. Minor weaknesses: the third suggestion is slightly muddled — it acknowledges the current behaviour is acceptable and partially contradicts itself about which cases produce a \"header\" message, and the \"requirement #6\" reference is imprecise given the spec is an unordered set with no numbering, which slightly weakens traceability. The `score=0.92` annotation is unexplained and adds no actionable content."
+  },
+  {
+    "test": "test_review_is_useful[date-minmax]",
+    "metric": "Review Is Useful [GEval]",
+    "score": 0.9,
+    "threshold": 0.7,
+    "passed": true,
+    "reason": "The review issues an APPROVED verdict with no blocking issues, which is consistent with the code satisfying the stated requirements (strict regex, per-item errors with index/value/reason, None/None when no valid dates, non-mutating input, ISO strings for both min and max). All three suggestions are specific about WHAT and WHERE and are directly actionable: the '$' vs '\\Z' regex anchor point identifies a real latent defect (trailing newline passing strict format validation) with a concrete fix; the missing non-mutation test names an untested requirement and how to cover it; the year-0000/datetime.date range note asks for a documented boundary decision. Suggestions are correctly flagged optional rather than used to force rejection, and none are style-only nitpicks. Minor shortcoming: the review does not comment on the open contract questions from the requirements (e.g., confirming the structured-result vs exception choice and the string-vs-date-object return type were actually agreed), and the odd index=-1 sentinel for non-list input is left unremarked, though these are arguably completeness rather than issue-quality concerns."
+  },
+  {
+    "test": "test_review_is_useful[email-validator]",
+    "metric": "Review Is Useful [GEval]",
+    "score": 0.8,
+    "threshold": 0.7,
+    "passed": true,
+    "reason": "The verdict is APPROVED with no blocking issues, which fits the code (it does implement every stated rule and the requirement set explicitly says only orderings named in the rule text are mandated, so the email_too_long-before-@-count ordering is permissible). The three suggestions are all clearly labelled optional and are actionable and specific: concrete boundary-value tests (254 total, 64-char local, 63-char label), a precise code-level fix for non-ASCII local-part (`ord(ch) > 127` check with reason `local_part_invalid_chars`), and a documentation/typing note about the dict vs dataclass return contract. Nothing is rejected on style grounds. Weaknesses: the suggestions are framed at a fairly high level of hedging (\"Optional hardening\", \"Consider...\"), and the first suggestion does not point to a specific test class/location, so it names WHAT more clearly than WHERE; the third is closer to a general musing than a defect with a definite location. The unexplained `score=0.95` is also unmotivated by any stated criterion. Overall the raised items are legitimate and usable, with minor vagueness in localisation."
+  },
+  {
+    "test": "test_solves_user_story[csv-summary]",
+    "metric": "Solves User Story [GEval]",
+    "score": 0.9,
+    "threshold": 0.7,
+    "passed": true,
+    "reason": "The implementation directly fulfills the analyst's story: it reads a CSV with `name`/`amount` columns and returns sum, average, and count, while collecting invalid numeric rows (with line number, raw value, and reason) instead of crashing. Edge cases implied by the story are well covered: header-only file (count 0, average None rather than ZeroDivisionError), all-invalid rows, empty/whitespace amounts, NaN/Infinity rejected via finite check, missing columns raising a clear CSVSchemaError, short rows yielding None amounts handled, extra columns ignored, and columns in any order. It accepts both a path and a file-like object, streams row-by-row, and closes files it opened. Accompanying unit tests exercise each of these acceptance scenarios, giving confidence the behaviour actually works. Minor gaps: a headerless file is silently misread as a schema error only when the first data row lacks the names (acceptable but arguably ambiguous), rows missing entirely from the file (e.g., duplicate header names) aren't addressed, `reader.line_num` can be off for embedded newlines within quoted fields, thousands separators/locale-style numbers are treated as invalid without comment, and there is no guard for a nonexistent file path (a raw OSError propagates). These are small relative to the story's scope; a requester would consider the feature done."
+  },
+  {
+    "test": "test_solves_user_story[date-minmax]",
+    "metric": "Solves User Story [GEval]",
+    "score": 1.0,
+    "threshold": 0.7,
+    "passed": true,
+    "reason": "The implementation fully satisfies the story: find_min_max_dates returns both the earliest and latest dates as YYYY-MM-DD strings and reports invalid items through a structured DateRangeResult with per-item index, value and Ukrainian reason. Edge cases implied by the story are handled: empty list yields (None, None) with no errors; a list with no valid dates yields (None, None) plus errors; non-string elements, wrong separators/non-zero-padded strings ('2026-1-01') are rejected via a strict regex; calendar-invalid dates ('2026-02-30', '2023-02-29') are caught by datetime.date, and leap-year handling is correct; a single valid date correctly returns the same value for min and max; non-list top-level input (None, tuple) is reported rather than crashing. The input list is not mutated, and accompanying tests cover each of these cases. Minor quibbles only: rejecting tuples/other iterables is stricter than the story requires, and no explicit handling of duplicate or extreme-year values, but these do not affect behavioural correctness."
+  },
+  {
+    "test": "test_solves_user_story[email-validator]",
+    "metric": "Solves User Story [GEval]",
+    "score": 0.9,
+    "threshold": 0.7,
+    "passed": true,
+    "reason": "The story asked for a dependency-free email validation function returning both a validity flag and a rejection reason, and the output delivers exactly that: a pure-stdlib `validate_email` returning `{\"is_valid\", \"reason\"}` with a documented, deterministic set of reason codes and no regex/third-party imports. Edge cases implied by the story are well covered — non-string input (`type_invalid`), empty and whitespace-only strings, leading/trailing whitespace, zero or multiple `@`, missing local part or domain, control and non-ASCII characters, quotes/backslash in the local part, dot and hyphen placement, missing TLD — plus boundary values on lengths (254 total, 64 local, 1–63 per label) verified by unittest cases that assert the exact boundary strings. The included test suite also pins down check ordering for inputs with several defects. Minor shortcomings: both files are pasted into one blob with an `from email_validator import ...` import, so it isn't runnable as-is without splitting; the boundary tests only exercise the failing side (255, 65, 64-char label) and never the passing side (254, 64, 63); quoted local parts, IP-literal domains, and internationalized addresses are deliberately excluded, and the domain length limit of 253 is not separately enforced. These are documented scope choices rather than gaps a requester would reject, so the story would be considered done."
+  },
+  {
+    "test": "test_spec_quality[csv-summary]",
+    "metric": "Spec Quality [GEval]",
+    "score": 0.9,
+    "threshold": 0.7,
+    "passed": true,
+    "reason": "The requirements are almost all single, atomic, testable statements (exact column names `name`/`amount`, exception on missing header columns, extra columns ignored, aggregates computed only over valid rows, `count` = valid rows, `count == 0` → `sum == 0` and `average == null`, deterministic order of `invalid_rows`, error records carrying 1-based line number, raw value and reason). Error handling and input validation implied by the story (\"повідомляючи про рядки з некоректними числами замість падіння\") are covered thoroughly: per-row error collection without raising, plus schema validation as a hard failure. Acceptance criteria are exemplary — each gives a concrete CSV literal and exact expected outcome (sum=60/count=3/average=20; mixed case with `xx`, empty, `Infinity`, `NaN`; extra `comment` column; missing `amount`; header-only; all-invalid), so they are directly executable as tests. No library or algorithm is prescribed, leaving implementation to the developer. Minor shortcomings: the first requirement about processing line-by-line \"not loading the whole file into memory\" edges into implementation dictation and is vaguely worded/untestable, the \"single structured response\" requirement bundles four fields into one statement, and the \"unambiguously convertible to a finite number, ignoring surrounding whitespace\" requirement combines two conditions; the interpretation of \"returns a structured list rather than stdout\" is stated as an assumption rather than confirmed, and edge "
+  },
+  {
+    "test": "test_spec_quality[date-minmax]",
+    "metric": "Spec Quality [GEval]",
+    "score": 0.8,
+    "threshold": 0.7,
+    "passed": true,
+    "reason": "Requirements are almost all single, testable statements (rejects non-strings, rejects '2026/01/01'-style formats, rejects '2026-02-30', error entry must carry index/value/reason, input list not mutated), and validation plus error reporting are thoroughly covered as the user story (\"коректно повідомляючи про некоректні рядки\") implies. Acceptance criteria are strong: each names a concrete input list and an exact expected outcome (min/max values, error count, index, reason), including edge cases like empty list and the leap-year pair ['2024-02-29','2023-02-29'], making them directly executable as tests. Nothing dictates a library or algorithm — parsing method is left to the developer. Minor shortcomings: a few requirements are contract negotiations rather than testable statements (the \"one of the agreed variants: structured result or exception\" item, and the open questions about return type and strict format), which leaves ambiguity that also leaks into the acceptance criteria (empty-list case hedged with \"або окрема узгоджена помилка\", and min/max compared as strings while the return type is explicitly undecided)."
+  },
+  {
+    "test": "test_spec_quality[email-validator]",
+    "metric": "Spec Quality [GEval]",
+    "score": 0.9,
+    "threshold": 0.7,
+    "passed": true,
+    "reason": "The output decomposes the story into atomic, individually testable requirements (one rule per line: exactly one `@`, local-part ≤64, total ≤254, label charset, hyphen placement), with no vague qualities like \"works well\". Acceptance criteria are exemplary: each names a concrete input (`\"user@@example.com\"`, `None`, `\" user@example.com\"`, 65-char local-part, `\"user@\" + \"a\"*64 + \".com\"`) and an exact expected outcome (`is_valid`/`reason` pair), so every one could be executed as a unit test. Error handling and validation are strong, covering non-string/`None` input, empty/whitespace-only strings, and a deterministic ordering rule so the first failure reason is stable — important since criteria assert a single reason per input. Minor shortcomings: the \"без сторонніх бібліотек\" constraint comes from the user, so restating it is fair, but a few requirements drift toward implementation/design decisions (exact reason-code string identifiers, no trimming, no IDN/punycode conversion, explicit exclusion of quoted-string support) that arguably belong to the developer; also the coverage of `domain_invalid_chars` and `local_part_invalid_chars` lacks a matching acceptance example, leaving a small gap between requirements and criteria."
+  }
+]

@@ -1,0 +1,13 @@
+.env
+*.log
+__pycache__/
+*.pyc
+.venv/
+.DS_Store
+index*/
+workspace/
+.pytest_cache/
+weights.yaml
+eval_queries.json
+.private-names.txt
+specs/
